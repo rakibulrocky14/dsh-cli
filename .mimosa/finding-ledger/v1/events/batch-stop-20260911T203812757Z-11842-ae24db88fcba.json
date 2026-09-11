@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260911T203812757Z-11842-ae24db88fcba",
+  "runId": "20260911T203812757Z-11842-ae24db88fcba",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "baseline_partial",
+        "stage": "baseline",
+        "target": ".",
+        "detail": "baseline capture had enumeration or snapshot errors",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline",
+        "target": ".",
+        "detail": "baseline_partial: baseline capture had enumeration or snapshot errors",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "6bfd33bd3d6839dfd7dc8b3ea40db0d8123f7a08ef7b34d3bb1ba4224dd4f3ce",
+  "rulesVersion": "unavailable",
+  "sessionHash": "2bdb8f3f51df21ebf98027ecbbe8a6f864c0d5eb7458584ba1679ee788b97dce",
+  "reportRef": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af-20260911T203812757Z-11842-ae24db88fcba.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-de8f2105db8d9a0980545fa4",
+    "mimosa-402d69aee587e03fec5cf71b"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "src/core/transcript.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/tui/engine.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/tui/app.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/tui/widgets.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/types/tui/app.d.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/types/tui/engine.d.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/types/tui/widgets.d.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/types/core/transcript.d.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/tui/app.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/tui/engine.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/tui/widgets.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/core/transcript.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-11T20:38:13.112Z"
+}

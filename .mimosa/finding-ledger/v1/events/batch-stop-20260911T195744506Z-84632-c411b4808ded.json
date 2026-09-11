@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260911T195744506Z-84632-c411b4808ded",
+  "runId": "20260911T195744506Z-84632-c411b4808ded",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "8cf274a39de902d7555639a9d654b3916653156c29ed18ac638713bd7e4febcf",
+  "rulesVersion": "unavailable",
+  "sessionHash": "2bdb8f3f51df21ebf98027ecbbe8a6f864c0d5eb7458584ba1679ee788b97dce",
+  "reportRef": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af-20260911T195744506Z-84632-c411b4808ded.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "src/tui/widgets.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/tui/app.tsx",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/types/tui/widgets.d.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/tui/app.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "lib/tui/widgets.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-11T19:57:44.872Z"
+}

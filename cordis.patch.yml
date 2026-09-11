@@ -1,0 +1,43 @@
+# The dsh-terminal bundle patch: interactive terminal surface over dsh-base.
+# Single-session, process-wide agent (like headless). Unlike web, base tool
+# rows stay enabled — the TUI is a window onto vanilla DSH, not a second host.
+#
+# Profile setup:
+#   dsh plugin --profile terminal add dsh-terminal
+#   dsh --profile terminal
+
+- id: system-prompt
+  config:
+    personaSuffix: Your working directory is {{cwd}}.
+    personaPrefix: >-
+      You are a coding agent powered by the {{model}} model.
+
+- id: tools
+  config:
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+- insert:
+    # PTC mode is a core execution capability shared with headless/web.
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    # The model-facing ask_user_question tool (a preset row on web; the
+    # rosterless terminal composes it process-wide so the agent can ask).
+    # Answered by this surface's userQuestions provider (modal/form).
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
+
+    # Parses terminal app flags, then provides terminalStartup.
+    - id: terminal-startup
+      name: 'dsh-terminal/startup'
+
+    # Interactive TTY runner: creates one Agent, streams, renders, exits on /quit.
+    - id: terminal-runner
+      name: 'dsh-terminal'
+      inject: [terminalStartup]
+      config:
+        resume: !!js ctx.terminalStartup.resume
+        model: !!js ctx.terminalStartup.model
+        provider: !!js ctx.terminalStartup.provider
+        print: !!js ctx.terminalStartup.print
+        line: !!js ctx.terminalStartup.line

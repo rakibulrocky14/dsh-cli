@@ -1,0 +1,593 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260911T194449317Z-78193-5a52a28d6d99",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "baseline",
+      "target": ".",
+      "reason": "baseline_partial: baseline capture had enumeration or snapshot errors"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": false,
+      "captured_files": 44,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 1,
+      "compensated_target_count": 9
+    },
+    "change_tracking": {
+      "touched_observed": 3,
+      "touched_retained": 3,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 9,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 9,
+      "selected_files": 9,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 9,
+      "scanned_files": 9,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "baseline_partial": 1,
+      "project_check_failed": 1
+    },
+    "reasons": [
+      {
+        "code": "baseline_partial",
+        "stage": "baseline",
+        "target": ".",
+        "detail": "baseline capture had enumeration or snapshot errors",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline",
+        "target": ".",
+        "detail": "baseline_partial: baseline capture had enumeration or snapshot errors",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-11T19:44:49.317Z",
+  "session_id": "sess_26ea7359-e41c-4710-bd62-c8e7433d12af",
+  "target": ".",
+  "revision": null,
+  "rules_version": "unavailable",
+  "diff_hash": "339934e3498faaa12c794d8df96ebbdbbe8be91119df3576ab5212f1d5685409",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 9,
+    "changed_files": [
+      {
+        "file": "lib/tui/app.js",
+        "ranges": [
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 70,
+            "end": 72
+          },
+          {
+            "start": 84,
+            "end": 84
+          },
+          {
+            "start": 106,
+            "end": 106
+          },
+          {
+            "start": 108,
+            "end": 108
+          },
+          {
+            "start": 111,
+            "end": 131
+          },
+          {
+            "start": 141,
+            "end": 141
+          },
+          {
+            "start": 159,
+            "end": 159
+          }
+        ],
+        "before_hash": "e7680417afe59fa17dc7d2ad165f30cca18b92f693feeab089f1f1ed99e20320",
+        "after_hash": "b2507a5e8f085984d1203e5ee2b409bb917dcee90663a451af668b1c4d823d38"
+      },
+      {
+        "file": "lib/tui/engine.js",
+        "ranges": [
+          {
+            "start": 149,
+            "end": 150
+          },
+          {
+            "start": 157,
+            "end": 157
+          },
+          {
+            "start": 287,
+            "end": 287
+          },
+          {
+            "start": 305,
+            "end": 321
+          },
+          {
+            "start": 336,
+            "end": 336
+          }
+        ],
+        "before_hash": "02b2a34811670117a250a3dcf3f45de79d1767e1443f19b708475ddff03c633d",
+        "after_hash": "df53e90456866652e645ac13f8ff92f08e0c02525a3919e4e2b81cdb91a03b8d"
+      },
+      {
+        "file": "lib/tui/widgets.js",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 1
+          },
+          {
+            "start": 24,
+            "end": 24
+          },
+          {
+            "start": 26,
+            "end": 49
+          },
+          {
+            "start": 75,
+            "end": 80
+          },
+          {
+            "start": 83,
+            "end": 83
+          },
+          {
+            "start": 88,
+            "end": 88
+          },
+          {
+            "start": 91,
+            "end": 93
+          },
+          {
+            "start": 100,
+            "end": 100
+          },
+          {
+            "start": 103,
+            "end": 120
+          },
+          {
+            "start": 167,
+            "end": 176
+          },
+          {
+            "start": 187,
+            "end": 187
+          },
+          {
+            "start": 249,
+            "end": 249
+          },
+          {
+            "start": 254,
+            "end": 256
+          },
+          {
+            "start": 274,
+            "end": 274
+          },
+          {
+            "start": 280,
+            "end": 280
+          },
+          {
+            "start": 295,
+            "end": 304
+          },
+          {
+            "start": 309,
+            "end": 309
+          },
+          {
+            "start": 312,
+            "end": 312
+          },
+          {
+            "start": 329,
+            "end": 329
+          },
+          {
+            "start": 334,
+            "end": 334
+          },
+          {
+            "start": 337,
+            "end": 337
+          },
+          {
+            "start": 347,
+            "end": 347
+          },
+          {
+            "start": 350,
+            "end": 350
+          }
+        ],
+        "before_hash": "71e6b13221c8c7ee8af4eb1fac4649fb421615661dadf321cc08958e540f509b",
+        "after_hash": "c5f205168476c994622ae51f8478c9933202fa288f842c53ca5ea178254ba210"
+      },
+      {
+        "file": "lib/types/tui/app.d.ts",
+        "ranges": [
+          {
+            "start": 15,
+            "end": 15
+          },
+          {
+            "start": 19,
+            "end": 24
+          }
+        ],
+        "before_hash": "55a247f7c9702993e37422a37ec5efa58a32a5d46f696ae0f93fcd1268a5c20e",
+        "after_hash": "4a67e203a69c72823e2968c0c05d4a1564dde4a25b443b5fd7f5d7b40eb65f84"
+      },
+      {
+        "file": "lib/types/tui/engine.d.ts",
+        "ranges": [
+          {
+            "start": 159,
+            "end": 160
+          },
+          {
+            "start": 167,
+            "end": 167
+          },
+          {
+            "start": 196,
+            "end": 200
+          }
+        ],
+        "before_hash": "7df4fa3534e211eb6b95f76eb130669bde81bb2ec63194157d4f4f27e13ebabd",
+        "after_hash": "e967589d2400062c2ca20f346be4752a08dcd22fc9993999983eb5d7588d0ffd"
+      },
+      {
+        "file": "lib/types/tui/widgets.d.ts",
+        "ranges": [
+          {
+            "start": 22,
+            "end": 22
+          },
+          {
+            "start": 24,
+            "end": 29
+          },
+          {
+            "start": 40,
+            "end": 45
+          },
+          {
+            "start": 47,
+            "end": 47
+          },
+          {
+            "start": 69,
+            "end": 70
+          },
+          {
+            "start": 81,
+            "end": 84
+          },
+          {
+            "start": 118,
+            "end": 118
+          },
+          {
+            "start": 171,
+            "end": 171
+          },
+          {
+            "start": 176,
+            "end": 176
+          }
+        ],
+        "before_hash": "984a40d2e75df414e6c46c0d5e71623e875a8a02bb07623dcadd2086e5b5d58e",
+        "after_hash": "1c7af7cf0f29267c3a648cacc0255a18f6675d061abaea534cb8fb821fc0ba36"
+      },
+      {
+        "file": "src/tui/app.tsx",
+        "ranges": [
+          {
+            "start": 20,
+            "end": 20
+          },
+          {
+            "start": 35,
+            "end": 38
+          },
+          {
+            "start": 107,
+            "end": 109
+          },
+          {
+            "start": 124,
+            "end": 124
+          },
+          {
+            "start": 147,
+            "end": 147
+          },
+          {
+            "start": 149,
+            "end": 149
+          },
+          {
+            "start": 152,
+            "end": 170
+          },
+          {
+            "start": 188,
+            "end": 191
+          },
+          {
+            "start": 223,
+            "end": 223
+          },
+          {
+            "start": 247,
+            "end": 247
+          },
+          {
+            "start": 264,
+            "end": 264
+          }
+        ],
+        "before_hash": "da0405773ad1e5edafd4316054ec6dc01797f3a6c667bc9a84548bcfbe3fcda9",
+        "after_hash": "be3f30a8876d28a07d1019042f951a5b243e0cc14952893efd280d269bda8d6a"
+      },
+      {
+        "file": "src/tui/engine.ts",
+        "ranges": [
+          {
+            "start": 218,
+            "end": 219
+          },
+          {
+            "start": 227,
+            "end": 227
+          },
+          {
+            "start": 368,
+            "end": 368
+          },
+          {
+            "start": 388,
+            "end": 403
+          },
+          {
+            "start": 420,
+            "end": 420
+          }
+        ],
+        "before_hash": "0bebaae498272c6c7b0bb4399a25a16ebece770fe69e7da0f0a097bea8b44472",
+        "after_hash": "c72d3f590e11cee07f8e6ce4f15620a50574a2b60deaa26d99b7078e00c4061b"
+      },
+      {
+        "file": "src/tui/widgets.tsx",
+        "ranges": [
+          {
+            "start": 25,
+            "end": 25
+          },
+          {
+            "start": 28,
+            "end": 73
+          },
+          {
+            "start": 117,
+            "end": 122
+          },
+          {
+            "start": 127,
+            "end": 127
+          },
+          {
+            "start": 135,
+            "end": 136
+          },
+          {
+            "start": 143,
+            "end": 144
+          },
+          {
+            "start": 146,
+            "end": 149
+          },
+          {
+            "start": 159,
+            "end": 159
+          },
+          {
+            "start": 164,
+            "end": 164
+          },
+          {
+            "start": 171,
+            "end": 175
+          },
+          {
+            "start": 178,
+            "end": 178
+          },
+          {
+            "start": 182,
+            "end": 183
+          },
+          {
+            "start": 185,
+            "end": 187
+          },
+          {
+            "start": 190,
+            "end": 196
+          },
+          {
+            "start": 199,
+            "end": 199
+          },
+          {
+            "start": 202,
+            "end": 202
+          },
+          {
+            "start": 251,
+            "end": 252
+          },
+          {
+            "start": 265,
+            "end": 274
+          },
+          {
+            "start": 285,
+            "end": 285
+          },
+          {
+            "start": 348,
+            "end": 348
+          },
+          {
+            "start": 352,
+            "end": 353
+          },
+          {
+            "start": 377,
+            "end": 377
+          },
+          {
+            "start": 400,
+            "end": 400
+          },
+          {
+            "start": 430,
+            "end": 437
+          },
+          {
+            "start": 452,
+            "end": 452
+          },
+          {
+            "start": 461,
+            "end": 462
+          },
+          {
+            "start": 501,
+            "end": 503
+          },
+          {
+            "start": 523,
+            "end": 525
+          },
+          {
+            "start": 532,
+            "end": 532
+          },
+          {
+            "start": 537,
+            "end": 537
+          },
+          {
+            "start": 553,
+            "end": 553
+          },
+          {
+            "start": 566,
+            "end": 566
+          }
+        ],
+        "before_hash": "0ced9efca6d5e61bcda9a559a2567f537ec3e1450d0776695086b1cd450da1ed",
+        "after_hash": "181f12bd50716d15bb360170f40a25db1d9080585acc69bdf4becfa61e2c91e7"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-11T19:44:48.255Z",
+    "completed_at": "2026-09-11T19:44:49.317Z",
+    "duration_ms": 1062,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 1062,
+    "peakMemoryBytes": 234471424,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 9,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af-20260911T194449317Z-78193-5a52a28d6d99.json",
+    "latest_report": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af.json",
+    "history_summary": ".mimosa/history/run-20260911T194449317Z-78193-5a52a28d6d99.json"
+  }
+}
