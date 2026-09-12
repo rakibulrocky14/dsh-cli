@@ -115,6 +115,10 @@ export interface StatusInput {
     /** Model context window, when resolved — upgrades the ctx segment to a percent. */
     ctxWindow?: number;
     mode: string;
+    /** Prompt cache hit rate (e.g. '85.2%'). */
+    cacheRate?: string;
+    /** Settled or live generation speed in tokens per second. */
+    tps?: number;
 }
 /** Status-line segments after width fitting (single line, no wrapping). */
 export interface StatusFit {
@@ -123,14 +127,16 @@ export interface StatusFit {
     cwd: string;
     ctx: string | undefined;
     mode: string;
+    cache?: string;
+    tps?: string;
 }
 /**
  * Context segment: `8.2k · 13%` when the window is known, else `8.2k tok`.
  */
 export declare function formatCtx(tokens: number, window?: number): string;
 /**
- * Fit status segments into one line: short mode chip always, then drop ctx,
- * shorten the path to its basename, then mid-clip the model id.
+ * Fit status segments into one line: short mode chip always, then drop tps,
+ * drop cache, drop ctx, shorten the path to its basename, then mid-clip the model id.
  * @param width - available content columns.
  * @param input - raw segments.
  */
@@ -177,12 +183,13 @@ export declare function FieldView({ label, field, focused, placeholder }: {
  * Main chat composer: two-row card with prompt on top and model badge + key hints below.
  * While a turn runs the border warms and the glyph becomes a spinner.
  */
-export declare function Composer({ field, focused, running, spinnerFrame, runSeconds, width, placeholder, model, effort, }: {
+export declare function Composer({ field, focused, running, spinnerFrame, runSeconds, tps, width, placeholder, model, effort, }: {
     field: Field;
     focused?: boolean;
     running?: boolean;
     spinnerFrame?: number;
     runSeconds?: number;
+    tps?: number;
     width?: number;
     placeholder?: string;
     model?: string;
@@ -237,14 +244,16 @@ export declare function TextDialog({ modal, width }: {
     }>;
     width?: number;
 }): React.JSX.Element;
-/** Width-fitted status line (`model · effort · ~/cwd · ctx · MODE`) plus key hints. */
-export declare function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, running, modalOpen, inPanel, width }: {
+/** Width-fitted status line (`model · effort · ~/cwd · ctx · cache · tps · MODE`) plus key hints. */
+export declare function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, cacheRate, tps, running, modalOpen, inPanel, width }: {
     model: string;
     effort: string;
     cwd: string;
     ctxTokens: number | undefined;
     ctxWindow?: number;
     mode: string;
+    cacheRate?: string;
+    tps?: number;
     running: boolean;
     modalOpen: boolean;
     inPanel: boolean;

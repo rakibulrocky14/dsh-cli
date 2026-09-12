@@ -78,15 +78,33 @@ export interface TodoRow {
  * @returns rows, or undefined when the session never wrote one.
  */
 export declare function foldTodos(events: readonly SessionEvent[]): TodoRow[] | undefined;
-/** Token totals folded from usage records. */
+/** Token totals folded from usage records, including cache hit rate and speed. */
 export interface UsageTotals {
     input: number;
     output: number;
     responses: number;
+    cacheHit?: number;
+    cacheMiss?: number;
+    cacheRate?: string;
+    tps?: number;
 }
+/** Extract prompt cache hits and misses across provider usage formats. */
+export declare function extractCacheTokens(usage: unknown): {
+    hit: number;
+    miss: number;
+};
+/**
+ * Format prompt cache hit rate string, matching DSH Web GUI's calculation.
+ * In DSH/OpenAI/Anthropic billing:
+ * - prompt tokens = uncached input + cacheRead (hits) + cacheWrite (misses/writes).
+ * - hit rate = cacheRead / (uncached input + cacheRead + cacheWrite).
+ * - never falsely rounds up to 100% if there were any uncached tokens.
+ */
+export declare function formatCacheHitRate(hit: number, uncachedInput: number, miss?: number): string | undefined;
 /**
  * Fold token usage: committed per-message records win; otherwise sum the
  * token-level usage chunks (never both — they describe the same calls).
+ * Also aggregates cache hit rate and average generation speed.
  * @param events - the session log in seq order.
  */
 export declare function foldUsage(events: readonly SessionEvent[]): UsageTotals;
@@ -119,7 +137,12 @@ export declare class LiveFeed {
     tokens: {
         inputTokens: number;
         outputTokens: number;
+        [key: string]: unknown;
     } | undefined;
+    get liveText(): string;
+    get liveReasoning(): string;
+    /** Live prompt cache hit rate when reported in streaming usage chunks. */
+    cacheRate(): string | undefined;
     /**
      * Surface-local input echo (slash commands never commit a log event, so
      * without this the submitted line would vanish from the transcript).

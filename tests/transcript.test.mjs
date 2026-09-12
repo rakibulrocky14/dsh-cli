@@ -17,7 +17,7 @@ const commands = await import('../lib/core/commands.js')
 const dshMod = await import('../lib/core/dsh.js')
 const engine = await import('../lib/tui/engine.js')
 
-const { projectEvents, LiveFeed, summarizeInterval, parseInline, splitFences, foldTodos, foldUsage } = transcript
+const { projectEvents, LiveFeed, summarizeInterval, parseInline, splitFences, foldTodos, foldUsage, extractCacheTokens, formatCacheHitRate } = transcript
 const { parseMarkdown } = await import('../lib/core/markdown.js')
 const { createUserMessage } = messages
 const { parseModelSelection, parseAssignments, normalizeEffort, shortHome, BUILTINS, EFFORT_LEVELS } = commands
@@ -252,6 +252,46 @@ describe('log folds', () => {
     assert.deepEqual(foldUsage(withMessages), { input: 100, output: 50, responses: 1 })
     const chunksOnly = [withMessages[0]]
     assert.deepEqual(foldUsage(chunksOnly), { input: 10, output: 5, responses: 0 })
+  })
+
+  it('extracts cache tokens and formats hit rates correctly', () => {
+    // DeepSeek format
+    assert.deepEqual(extractCacheTokens({ prompt_cache_hit_tokens: 850, prompt_cache_miss_tokens: 150 }), { hit: 850, miss: 150 })
+    // Claude / Bedrock format
+    assert.deepEqual(extractCacheTokens({ cacheRead: 400, cacheWrite: 100 }), { hit: 400, miss: 100 })
+    // OpenAI prompt_tokens_details
+    assert.deepEqual(extractCacheTokens({ prompt_tokens_details: { cached_tokens: 300 } }), { hit: 300, miss: 0 })
+    // Empty
+    assert.deepEqual(extractCacheTokens({}), { hit: 0, miss: 0 })
+
+    // formatCacheHitRate
+    assert.equal(formatCacheHitRate(0, 100), undefined)
+    // DSH / pi-ai format: 85 cached, 15 uncached => 85 / 100 = 85.0%
+    assert.equal(formatCacheHitRate(85, 15), '85.0%')
+    // Raw provider format with total prompt tokens (1000 total, 850 hit, 150 miss)
+    assert.equal(formatCacheHitRate(850, 1000, 150), '85.0%')
+    // High cache hit never falsely rounds up to 100% when uncached tokens exist
+    assert.equal(formatCacheHitRate(130304, 399, 0), '99.7%')
+    // True 100% cache hit when 0 uncached tokens
+    assert.equal(formatCacheHitRate(1000, 0, 0), '100.0%')
+    assert.equal(formatCacheHitRate(100, -100), undefined)
+  })
+
+  it('folds usage with prompt cache hit rate and generation speed', () => {
+    const events = [
+      { seq: 0, time: 1000, type: 'turn/start', data: {} },
+      { seq: 1, time: 1500, type: 'assistant/message', data: { message: { content: [] }, usage: { inputTokens: 1000, outputTokens: 120, prompt_cache_hit_tokens: 850, prompt_cache_miss_tokens: 150 } } },
+      { seq: 2, time: 3000, type: 'turn/end', data: {} },
+    ]
+    const totals = foldUsage(events)
+    assert.equal(totals.input, 1000)
+    assert.equal(totals.output, 120)
+    assert.equal(totals.responses, 1)
+    assert.equal(totals.cacheHit, 850)
+    assert.equal(totals.cacheMiss, 150)
+    assert.equal(totals.cacheRate, '85.0%')
+    // 120 tokens / 2 seconds = 60 tps
+    assert.equal(totals.tps, 60)
   })
 
   it('finds fork boundaries at completed turns', () => {

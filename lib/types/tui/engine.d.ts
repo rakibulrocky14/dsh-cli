@@ -157,6 +157,12 @@ export declare class Engine {
     /** A running turn drives the spinner and the elapsed-seconds chrome. */
     get running(): boolean;
     set running(value: boolean);
+    /** Latest settled tokens-per-second generation speed. */
+    lastTps: number | undefined;
+    /** Prompt cache hit rate (e.g. '85.2%'). */
+    cacheRate: string | undefined;
+    /** Current generation speed during a running turn or last settled turn TPS. */
+    liveTps(): number | undefined;
     view: View;
     rows: Row[];
     rowsLoading: boolean;
@@ -232,7 +238,7 @@ export declare class Engine {
     reopen(startup: StartupValues): Promise<void>;
     /** Wire stream + model listeners around an adopted handle. */
     private adopt;
-    /** Refresh cached status-bar readings (context pressure, mode). */
+    /** Refresh cached status-bar readings (context pressure, mode, cache hit rate). */
     private refreshStatus;
     /**
      * Resolve the current model's context window for the ctx % meter. Cached

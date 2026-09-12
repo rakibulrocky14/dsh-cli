@@ -284,16 +284,69 @@ export function foldTodos(events: readonly SessionEvent[]): TodoRow[] | undefine
   })
 }
 
-/** Token totals folded from usage records. */
+/** Token totals folded from usage records, including cache hit rate and speed. */
 export interface UsageTotals {
   input: number
   output: number
   responses: number
+  cacheHit?: number
+  cacheMiss?: number
+  cacheRate?: string
+  tps?: number
+}
+
+/** Extract prompt cache hits and misses across provider usage formats. */
+export function extractCacheTokens(usage: unknown): { hit: number; miss: number } {
+  if (typeof usage !== 'object' || usage === null) return { hit: 0, miss: 0 }
+  const u = usage as Record<string, unknown>
+  const hit = Number(
+    u.prompt_cache_hit_tokens ??
+    u.cacheRead ??
+    u.cacheReadTokens ??
+    u.cacheReadInputTokens ??
+    u.cachedTokens ??
+    (u.prompt_tokens_details as Record<string, unknown> | undefined)?.cached_tokens ??
+    0
+  ) || 0
+  const miss = Number(
+    u.prompt_cache_miss_tokens ??
+    u.cacheWrite ??
+    u.cacheWriteTokens ??
+    u.cacheCreationInputTokens ??
+    0
+  ) || 0
+  return { hit, miss }
+}
+
+/**
+ * Format prompt cache hit rate string, matching DSH Web GUI's calculation.
+ * In DSH/OpenAI/Anthropic billing:
+ * - prompt tokens = uncached input + cacheRead (hits) + cacheWrite (misses/writes).
+ * - hit rate = cacheRead / (uncached input + cacheRead + cacheWrite).
+ * - never falsely rounds up to 100% if there were any uncached tokens.
+ */
+export function formatCacheHitRate(hit: number, uncachedInput: number, miss = 0): string | undefined {
+  if (hit <= 0) return undefined
+  // In raw provider APIs (e.g. raw DeepSeek/OpenAI), uncachedInput is prompt_tokens (total).
+  // In DSH / pi-ai / Anthropic, uncachedInput is uncached prompt tokens only.
+  const isTotalInput = uncachedInput >= (hit + miss) && miss > 0
+  const denominator = isTotalInput ? uncachedInput : (uncachedInput + hit + miss)
+  if (denominator <= 0) return undefined
+  const missed = isTotalInput ? (denominator - hit) : (uncachedInput + miss)
+  if (missed <= 0) return '100.0%'
+  const rate = (hit / denominator) * 100
+  // Never falsely round to 100.0% if there were uncached prompt tokens
+  if (rate >= 99.95) {
+    const decimal = Math.min(9, Math.floor((1 - (missed / denominator)) * 1000) % 10)
+    return `99.${String(decimal)}%`
+  }
+  return `${rate.toFixed(1)}%`
 }
 
 /**
  * Fold token usage: committed per-message records win; otherwise sum the
  * token-level usage chunks (never both — they describe the same calls).
+ * Also aggregates cache hit rate and average generation speed.
  * @param events - the session log in seq order.
  */
 export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
@@ -303,25 +356,61 @@ export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
   let chunkInput = 0
   let chunkOutput = 0
   let sawMessage = false
+  let cacheHit = 0
+  let cacheMiss = 0
+  let chunkCacheHit = 0
+  let chunkCacheMiss = 0
+  const turnStarts: number[] = []
+  let totalTurnSec = 0
+
   for (const event of events) {
-    if (event.type === 'assistant/message') {
+    if (event.type === 'turn/start') {
+      if (typeof event.time === 'number') turnStarts.push(event.time)
+    } else if (event.type === 'turn/end') {
+      const start = turnStarts.pop()
+      if (start !== undefined && typeof event.time === 'number' && event.time > start) {
+        totalTurnSec += (event.time - start) / 1000
+      }
+    } else if (event.type === 'assistant/message') {
       responses++
-      const usage = (event.data as { usage?: { inputTokens?: unknown; outputTokens?: unknown } }).usage
+      const data = event.data as { usage?: Record<string, unknown> }
+      const usage = data?.usage
       if (usage !== undefined && typeof usage.inputTokens === 'number') {
         sawMessage = true
         input += usage.inputTokens
         output += typeof usage.outputTokens === 'number' ? usage.outputTokens : 0
+        const c = extractCacheTokens(usage)
+        cacheHit += c.hit
+        cacheMiss += c.miss
       }
     } else if (event.type === 'assistant/chunk') {
-      const chunk = (event.data as { chunk?: { type?: string; usage?: { inputTokens?: unknown; outputTokens?: unknown } } }).chunk
+      const chunk = (event.data as { chunk?: { type?: string; usage?: Record<string, unknown> } }).chunk
       const usage = chunk?.type === 'usage' ? chunk.usage : undefined
       if (usage !== undefined && typeof usage.inputTokens === 'number') {
         chunkInput += usage.inputTokens
         chunkOutput += typeof usage.outputTokens === 'number' ? usage.outputTokens : 0
+        const c = extractCacheTokens(usage)
+        chunkCacheHit += c.hit
+        chunkCacheMiss += c.miss
       }
     }
   }
-  return sawMessage ? { input, output, responses } : { input: chunkInput, output: chunkOutput, responses }
+
+  const finalInput = sawMessage ? input : chunkInput
+  const finalOutput = sawMessage ? output : chunkOutput
+  const finalCacheHit = sawMessage ? cacheHit : chunkCacheHit
+  const finalCacheMiss = sawMessage ? cacheMiss : chunkCacheMiss
+
+  const totals: UsageTotals = { input: finalInput, output: finalOutput, responses }
+  if (finalCacheHit > 0) {
+    totals.cacheHit = finalCacheHit
+    totals.cacheMiss = finalCacheMiss
+    totals.cacheRate = formatCacheHitRate(finalCacheHit, finalInput, finalCacheMiss)
+  }
+  if (totalTurnSec > 0 && finalOutput > 0) {
+    totals.tps = Math.round(finalOutput / totalTurnSec)
+  }
+  return totals
 }
 
 /** Outcome of one owned run interval (for one-shot exit codes). */
@@ -384,7 +473,17 @@ export class LiveFeed {
   private snapshotCache: Block[] | undefined = undefined
   private echoes: Block[] = []
   private echoSeq = 0
-  tokens: { inputTokens: number; outputTokens: number } | undefined = undefined
+  tokens: { inputTokens: number; outputTokens: number; [key: string]: unknown } | undefined = undefined
+
+  get liveText(): string { return this.text }
+  get liveReasoning(): string { return this.reasoning }
+
+  /** Live prompt cache hit rate when reported in streaming usage chunks. */
+  cacheRate(): string | undefined {
+    if (this.tokens === undefined) return undefined
+    const { hit, miss } = extractCacheTokens(this.tokens)
+    return formatCacheHitRate(hit, this.tokens.inputTokens, miss)
+  }
 
   /**
    * Surface-local input echo (slash commands never commit a log event, so
