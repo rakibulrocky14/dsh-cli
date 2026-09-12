@@ -11,12 +11,9 @@
 
 ---
 
-## 📸 Screenshots
 
-### 🚀 Initial Start Screen & DeepSeek Blue TUI
 ![dsh-terminal Initial Screen](docs/assets/dsh-terminal-preview.png)
 
-### 🎛️ Interactive Agent Presets (`/presets`)
 ![dsh-terminal Agent Presets](docs/assets/dsh-presets-preview.png)
 
 ---
