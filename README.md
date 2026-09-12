@@ -4,7 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](https://nodejs.org)
-[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek-Harness%20Plugin-0066FF.svg)](https://github.com/deepseek-ai)
+[![Community Plugin](https://img.shields.io/badge/DeepSeek%20Harness-Community%20Plugin%20(Unofficial)-0066FF.svg)](https://github.com/rakibulrocky14/dsh-cli)
+
+> [!IMPORTANT]
+> **Disclaimer**: This is an independent, community-driven open-source project and is **not affiliated with, endorsed by, or sponsored by DeepSeek AI or the official DeepSeek team**. "DeepSeek" and "DeepSeek Harness" are trademarks of their respective holders.
 
 ---
 
@@ -178,6 +181,14 @@ npm test
 ## 🏷️ Discovery & Tags
 
 `#deepseek` `#deepseek-harness` `#dsh` `#dsh-cli` `#dsh-terminal` `#terminal` `#tui` `#cli` `#ai-agent` `#llm` `#cordis` `#coding-assistant`
+
+---
+
+## ⚠️ Disclaimer
+
+`dsh-cli` is an independent, unofficial community project built for the DeepSeek Harness ecosystem. It is **not affiliated with, maintained by, sponsored by, or endorsed by DeepSeek AI or Hangzhou DeepSeek Artificial Intelligence Co., Ltd.**
+
+All product names, logos, brands, and trademarks are property of their respective owners.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-terminal",
   "version": "0.1.0",
-  "description": "Vanilla DSH in the terminal: a Web-GUI-parity Cordis surface over dsh-base. Your plugins, presets, tools, and settings — nothing extra, nothing less.",
+  "description": "Vanilla DSH in the terminal: a Web-GUI-parity Cordis surface over dsh-base (Unofficial Community Plugin). Your plugins, presets, tools, and settings — nothing extra, nothing less.",
   "keywords": [
     "dsh",
     "deepseek-harness",
