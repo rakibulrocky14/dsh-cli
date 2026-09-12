@@ -2,7 +2,7 @@
 
 > **Vanilla DeepSeek Harness in the terminal** — A Web-GUI-parity Cordis surface over `dsh-base`. Your agents, presets, tools, sessions, approval, settings, and plugins directly in your terminal. Nothing extra, nothing less.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](https://nodejs.org)
 [![Community Plugin](https://img.shields.io/badge/DeepSeek%20Harness-Community%20Plugin%20(Unofficial)-0066FF.svg)](https://github.com/rakibulrocky14/dsh-cli)
 
@@ -194,4 +194,4 @@ All product names, logos, brands, and trademarks are property of their respectiv
 
 ## 📄 License
 
-[MIT](LICENSE) © [rakibulrocky14](https://github.com/rakibulrocky14)
+[Apache-2.0](LICENSE) © [rakibulrocky14](https://github.com/rakibulrocky14)
