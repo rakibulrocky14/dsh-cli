@@ -266,9 +266,15 @@ describe('log folds', () => {
 
     // formatCacheHitRate
     assert.equal(formatCacheHitRate(0, 100), undefined)
-    assert.equal(formatCacheHitRate(85, 100), '85.0%')
-    assert.equal(formatCacheHitRate(852, 1000, 148), '85.2%')
-    assert.equal(formatCacheHitRate(100, 0), undefined)
+    // DSH / pi-ai format: 85 cached, 15 uncached => 85 / 100 = 85.0%
+    assert.equal(formatCacheHitRate(85, 15), '85.0%')
+    // Raw provider format with total prompt tokens (1000 total, 850 hit, 150 miss)
+    assert.equal(formatCacheHitRate(850, 1000, 150), '85.0%')
+    // High cache hit never falsely rounds up to 100% when uncached tokens exist
+    assert.equal(formatCacheHitRate(130304, 399, 0), '99.7%')
+    // True 100% cache hit when 0 uncached tokens
+    assert.equal(formatCacheHitRate(1000, 0, 0), '100.0%')
+    assert.equal(formatCacheHitRate(100, -100), undefined)
   })
 
   it('folds usage with prompt cache hit rate and generation speed', () => {

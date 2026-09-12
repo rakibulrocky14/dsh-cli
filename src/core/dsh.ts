@@ -807,6 +807,68 @@ export class Dsh {
     }
   }
 
+  /** Cumulative token usage from durable projections (parity with Web GUI). */
+  readTokenUsage(session: DshSession): { uncachedInputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } | undefined {
+    const projections = service<Record<string, unknown>>(this.ctx, 'sessionProjections')
+    if (projections === undefined) return undefined
+    try {
+      if (hasMethod(projections, 'stateOf')) {
+        const state = (projections.stateOf as (s: DshSession, key: string) => unknown).call(projections, session, 'tokenUsage') as {
+          totals?: { uncachedInputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+        } | undefined
+        if (state?.totals !== undefined && typeof state.totals.uncachedInputTokens === 'number') {
+          return {
+            uncachedInputTokens: state.totals.uncachedInputTokens,
+            outputTokens: Number(state.totals.outputTokens) || 0,
+            cacheReadTokens: Number(state.totals.cacheReadTokens) || 0,
+            cacheWriteTokens: Number(state.totals.cacheWriteTokens) || 0,
+          }
+        }
+      }
+      if (hasMethod(projections, 'snapshot')) {
+        const snap = (projections.snapshot as (s: DshSession) => unknown).call(projections, session) as {
+          values?: { tokenUsage?: { uncachedInputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number } }
+        } | undefined
+        const u = snap?.values?.tokenUsage
+        if (u !== undefined && typeof u.uncachedInputTokens === 'number') {
+          return {
+            uncachedInputTokens: u.uncachedInputTokens,
+            outputTokens: Number(u.outputTokens) || 0,
+            cacheReadTokens: Number(u.cacheReadTokens) || 0,
+            cacheWriteTokens: Number(u.cacheWriteTokens) || 0,
+          }
+        }
+      }
+    } catch {
+      return undefined
+    }
+    return undefined
+  }
+
+  /** Decode throughput / session stats from durable projections (parity with Web GUI). */
+  readSessionStats(session: DshSession): { decodeMs?: number; decodeTokens?: number; tps?: number } | undefined {
+    const projections = service<Record<string, unknown>>(this.ctx, 'sessionProjections')
+    if (projections === undefined) return undefined
+    try {
+      let stats: { decodeMs?: number; decodeTokens?: number } | undefined
+      if (hasMethod(projections, 'stateOf')) {
+        stats = (projections.stateOf as (s: DshSession, key: string) => unknown).call(projections, session, 'sessionStats') as typeof stats
+      } else if (hasMethod(projections, 'snapshot')) {
+        const snap = (projections.snapshot as (s: DshSession) => unknown).call(projections, session) as {
+          values?: { sessionStats?: typeof stats }
+        }
+        stats = snap?.values?.sessionStats
+      }
+      if (stats !== undefined && typeof stats.decodeMs === 'number' && typeof stats.decodeTokens === 'number') {
+        const tps = stats.decodeMs > 0 ? Math.round(stats.decodeTokens / (stats.decodeMs / 1000)) : undefined
+        return { decodeMs: stats.decodeMs, decodeTokens: stats.decodeTokens, tps }
+      }
+    } catch {
+      return undefined
+    }
+    return undefined
+  }
+
   /** Permission-preset service across ctx-key spellings. */
   private permissionService(): Record<string, unknown> | undefined {
     return service<Record<string, unknown>>(this.ctx, 'permissionPresets')

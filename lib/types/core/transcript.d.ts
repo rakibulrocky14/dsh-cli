@@ -93,8 +93,14 @@ export declare function extractCacheTokens(usage: unknown): {
     hit: number;
     miss: number;
 };
-/** Format cache hit rate percentage string (e.g. '85.2%'). */
-export declare function formatCacheHitRate(hit: number, totalInput: number, miss?: number): string | undefined;
+/**
+ * Format prompt cache hit rate string, matching DSH Web GUI's calculation.
+ * In DSH/OpenAI/Anthropic billing:
+ * - prompt tokens = uncached input + cacheRead (hits) + cacheWrite (misses/writes).
+ * - hit rate = cacheRead / (uncached input + cacheRead + cacheWrite).
+ * - never falsely rounds up to 100% if there were any uncached tokens.
+ */
+export declare function formatCacheHitRate(hit: number, uncachedInput: number, miss?: number): string | undefined;
 /**
  * Fold token usage: committed per-message records win; otherwise sum the
  * token-level usage chunks (never both — they describe the same calls).

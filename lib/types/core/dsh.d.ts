@@ -202,6 +202,19 @@ export declare class Dsh {
         totalTokens: number;
         surfaceTokens: number;
     } | undefined;
+    /** Cumulative token usage from durable projections (parity with Web GUI). */
+    readTokenUsage(session: DshSession): {
+        uncachedInputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheWriteTokens: number;
+    } | undefined;
+    /** Decode throughput / session stats from durable projections (parity with Web GUI). */
+    readSessionStats(session: DshSession): {
+        decodeMs?: number;
+        decodeTokens?: number;
+        tps?: number;
+    } | undefined;
     /** Permission-preset service across ctx-key spellings. */
     private permissionService;
     /** Permission-preset names in declaration order. */

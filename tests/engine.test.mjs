@@ -225,6 +225,35 @@ describe('engine', () => {
     await engine.quit()
   })
 
+  it('reads tokenUsage and sessionStats projections for Web GUI parity in /usage', async () => {
+    const agent = fakeAgent('session-proj')
+    const ctx = fakeCtx({
+      agentDefaultModel: { currentSelection: () => ({ provider: 'p', model: 'm' }) },
+      agents: { create: async () => ({ agent, dispose: async () => {} }), resume: async () => ({ agent, dispose: async () => {} }) },
+      commands: { list: () => [] },
+      tools: { schemas: () => [] },
+      userQuestions: { registerProvider: () => () => {} },
+      sessionProjections: {
+        snapshot: () => ({
+          values: {
+            tokenUsage: { uncachedInputTokens: 399, outputTokens: 915, cacheReadTokens: 130304, cacheWriteTokens: 0 },
+            sessionStats: { decodeMs: 5000, decodeTokens: 915 },
+          },
+        }),
+      },
+    })
+    const engine = new Engine(ctx, () => {})
+    await engine.boot({ resume: '', model: '', provider: '', print: '' })
+    engine.openView({ name: 'usage' })
+    const cacheRow = engine.rows.find(r => r.id === 'cache')
+    const speedRow = engine.rows.find(r => r.id === 'speed')
+    const inRow = engine.rows.find(r => r.id === 'in')
+    assert.equal(cacheRow?.secondary, '99.7%')
+    assert.equal(speedRow?.secondary, '183 tps')
+    assert.equal(inRow?.secondary, '130703')
+    await engine.quit()
+  })
+
   it('names the sessions panel from the sessionQuery corpus', async () => {
     const agent = fakeAgent('session-current01')
     const ctx = fakeCtx({
