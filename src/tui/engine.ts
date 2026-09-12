@@ -208,11 +208,10 @@ export class Engine {
   }
 
   set running(value: boolean) {
-    if (this.runningFlag && !value && this.runStartValue !== undefined) {
-      const elapsed = Math.max(0.2, (Date.now() - this.runStartValue) / 1000)
-      const outTokens = this.feed.tokens?.outputTokens ?? Math.round((this.feed.liveText.length + this.feed.liveReasoning.length) / 3.5)
-      if (outTokens > 0) {
-        this.lastTps = Math.round(outTokens / elapsed)
+    if (this.runningFlag && !value) {
+      const live = this.feed.liveTps(this.runStartValue)
+      if (live !== undefined && live > 0) {
+        this.lastTps = live
       }
     }
     this.runningFlag = value
@@ -226,14 +225,11 @@ export class Engine {
 
   /** Current generation speed during a running turn or last settled turn TPS. */
   liveTps(): number | undefined {
-    if (this.running && this.runStartValue !== undefined) {
-      const elapsed = (Date.now() - this.runStartValue) / 1000
-      if (elapsed >= 0.4) {
-        const outTokens = this.feed.tokens?.outputTokens ?? Math.round((this.feed.liveText.length + this.feed.liveReasoning.length) / 3.5)
-        if (outTokens > 0) return Math.round(outTokens / elapsed)
-      }
+    if (this.running) {
+      const live = this.feed.liveTps(this.runStartValue)
+      if (live !== undefined) return live
     }
-    return this.lastTps
+    return this.lastTps ?? this.feed.liveTps()
   }
 
   view: View = { name: 'chat' }
@@ -476,7 +472,7 @@ export class Engine {
     this.emit()
   }
 
-  /** Refresh cached status-bar readings (context pressure, mode, cache hit rate). */
+  /** Refresh cached status-bar readings (context pressure, mode, cache hit rate, TPS). */
   private refreshStatus(): void {
     const agent = this.agent
     if (agent === undefined) {
@@ -490,17 +486,15 @@ export class Engine {
     this.mode = this.dsh.permissionCurrent(events)
     const tokenUsage = this.dsh.readTokenUsage(agent.session)
     const sessionStats = this.dsh.readSessionStats(agent.session)
+    const totals = foldUsage(events)
     if (tokenUsage !== undefined) {
       this.cacheRate = this.feed.cacheRate() ?? formatCacheHitRate(tokenUsage.cacheReadTokens, tokenUsage.uncachedInputTokens, tokenUsage.cacheWriteTokens)
     } else {
-      const totals = foldUsage(events)
       this.cacheRate = this.feed.cacheRate() ?? totals.cacheRate
-      if (totals.tps !== undefined && totals.tps > 0 && this.lastTps === undefined) {
-        this.lastTps = totals.tps
-      }
     }
-    if (sessionStats?.tps !== undefined && sessionStats.tps > 0 && this.lastTps === undefined) {
-      this.lastTps = sessionStats.tps
+    const resolvedTps = sessionStats?.tps ?? totals.turnTps ?? totals.tps ?? this.feed.liveTps()
+    if (resolvedTps !== undefined && resolvedTps > 0) {
+      this.lastTps = resolvedTps
     }
   }
 
@@ -937,7 +931,7 @@ export class Engine {
           ? (tokenUsage.uncachedInputTokens + tokenUsage.cacheReadTokens + tokenUsage.cacheWriteTokens)
           : totals.input
         const outTokens = tokenUsage?.outputTokens ?? totals.output
-        const tps = sessionStats?.tps ?? this.lastTps ?? totals.tps
+        const tps = sessionStats?.tps ?? totals.turnTps ?? totals.tps ?? this.lastTps
         const projectedCache = tokenUsage !== undefined
           ? formatCacheHitRate(tokenUsage.cacheReadTokens, tokenUsage.uncachedInputTokens, tokenUsage.cacheWriteTokens)
           : undefined

@@ -38,8 +38,8 @@ function fakeCtx(services = {}) {
   }
 }
 
-function fakeAgent(id = 'session-1') {
-  const session = { id, seq: 0, events: [], header: { id, createdAt: Date.now(), cwd: '/tmp' } }
+function fakeAgent(id = 'session-1', events = []) {
+  const session = { id, seq: events.length, events, header: { id, createdAt: Date.now(), cwd: '/tmp' } }
   const agent = {
     id, options: {}, session, status: 'idle',
     ctx: { on: () => () => {}, get: () => undefined },
@@ -251,6 +251,31 @@ describe('engine', () => {
     assert.equal(cacheRow?.secondary, '99.7%')
     assert.equal(speedRow?.secondary, '183 tps')
     assert.equal(inRow?.secondary, '130703')
+    await engine.quit()
+  })
+
+  it('settles lastTps from decode events fold when sessionStats projection is absent', async () => {
+    const events = [
+      { seq: 0, time: 1000, type: 'turn/start', data: { turn: 1 } },
+      { seq: 1, time: 1000, type: 'step/start', data: { turn: 1, step: 0 } },
+      { seq: 2, time: 1500, type: 'assistant/chunk', data: { turn: 1, step: 0, chunk: { type: 'text-delta', index: 0, text: 'Hello' } } },
+      { seq: 3, time: 2500, type: 'assistant/message', data: { turn: 1, step: 0, message: { content: [] }, usage: { inputTokens: 500, outputTokens: 90 } } },
+      { seq: 4, time: 2500, type: 'step/end', data: { turn: 1, step: 0 } },
+      { seq: 5, time: 2500, type: 'turn/end', data: { turn: 1 } },
+    ]
+    const agent = fakeAgent('session-fold-tps', events)
+    const ctx = fakeCtx({
+      agentDefaultModel: { currentSelection: () => ({ provider: 'p', model: 'm' }) },
+      agents: { create: async () => ({ agent, dispose: async () => {} }), resume: async () => ({ agent, dispose: async () => {} }) },
+      commands: { list: () => [] },
+      tools: { schemas: () => [] },
+      userQuestions: { registerProvider: () => () => {} },
+    })
+    const engine = new Engine(ctx, () => {})
+    await engine.boot({ resume: '', model: '', provider: '', print: '' })
+    // Decode: 2500 - 1500 = 1000ms = 1.0s, outputTokens = 90 => 90 tps
+    assert.equal(engine.lastTps, 90)
+    assert.equal(engine.liveTps(), 90)
     await engine.quit()
   })
 

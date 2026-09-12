@@ -17,7 +17,7 @@ const commands = await import('../lib/core/commands.js')
 const dshMod = await import('../lib/core/dsh.js')
 const engine = await import('../lib/tui/engine.js')
 
-const { projectEvents, LiveFeed, summarizeInterval, parseInline, splitFences, foldTodos, foldUsage, extractCacheTokens, formatCacheHitRate } = transcript
+const { projectEvents, LiveFeed, summarizeInterval, parseInline, splitFences, foldTodos, foldUsage, extractCacheTokens, formatCacheHitRate, isTokenDelta } = transcript
 const { parseMarkdown } = await import('../lib/core/markdown.js')
 const { createUserMessage } = messages
 const { parseModelSelection, parseAssignments, normalizeEffort, shortHome, BUILTINS, EFFORT_LEVELS } = commands
@@ -111,6 +111,21 @@ describe('LiveFeed', () => {
     const out = summarizeInterval(LOG, 0)
     assert.equal(out.text, 'hi there')
     assert.equal(out.reasonKind, 'error')
+  })
+
+  it('measures live streaming TPS from first token decode elapsed time', () => {
+    const feed = new LiveFeed()
+    assert.equal(feed.liveTps(), undefined)
+    feed.pushChunk({ type: 'block-start', index: 0, blockType: 'text' })
+    assert.equal(feed.liveTps(), undefined)
+    feed.pushChunk({ type: 'text-delta', index: 0, text: 'Hello world' })
+    feed.firstTokenTime = Date.now() - 1000
+    feed.tokens = { inputTokens: 100, outputTokens: 80 }
+    assert.equal(feed.liveTps(), 80)
+    feed.notifyCommitted([
+      { seq: 0, time: Date.now(), type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'Hello world' }] }, usage: { outputTokens: 80 } } },
+    ])
+    assert.equal(feed.liveTps(), 80)
   })
 })
 
@@ -292,6 +307,39 @@ describe('log folds', () => {
     assert.equal(totals.cacheRate, '85.0%')
     // 120 tokens / 2 seconds = 60 tps
     assert.equal(totals.tps, 60)
+  })
+
+  it('calculates decode throughput rather than total wall-clock turn duration', () => {
+    // Turn: TTFT is 2s, decode is 1s for 75 tokens, and tool call takes 20s.
+    // Total turn wall clock = 23s (which in naive formula would collapse to 3 tps!).
+    // Actual decode speed = 75 tokens / 1.0s = 75 tps!
+    const events = [
+      { seq: 0, time: 1000, type: 'turn/start', data: { turn: 1 } },
+      { seq: 1, time: 1000, type: 'step/start', data: { turn: 1, step: 0 } },
+      { seq: 2, time: 3000, type: 'assistant/chunk', data: { turn: 1, step: 0, chunk: { type: 'text-delta', index: 0, text: 'hi' } } },
+      { seq: 3, time: 4000, type: 'assistant/message', data: { turn: 1, step: 0, message: { content: [] }, usage: { inputTokens: 500, outputTokens: 75 } } },
+      { seq: 4, time: 4000, type: 'step/end', data: { turn: 1, step: 0 } },
+      { seq: 5, time: 4010, type: 'tool/call', data: { callId: 'c1', name: 'bash', arguments: '{}' } },
+      { seq: 6, time: 24000, type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', content: [], isError: false }] } } },
+      { seq: 7, time: 24000, type: 'turn/end', data: { turn: 1 } },
+    ]
+    const totals = foldUsage(events)
+    assert.equal(totals.output, 75)
+    assert.equal(totals.tps, 75)
+    assert.equal(totals.turnTps, 75)
+  })
+
+  it('validates isTokenDelta helper', () => {
+    assert.equal(isTokenDelta({ type: 'text-delta', text: 'hi' }), true)
+    assert.equal(isTokenDelta({ type: 'text-delta', text: '' }), false)
+    assert.equal(isTokenDelta({ type: 'reasoning-delta', text: 'thinking' }), true)
+    assert.equal(isTokenDelta({ type: 'reasoning-delta', text: '' }), false)
+    assert.equal(isTokenDelta({ type: 'tool-call-delta', argumentsDelta: '{"a":1}' }), true)
+    assert.equal(isTokenDelta({ type: 'tool-call-delta', argumentsDelta: '', name: 'bash' }), true)
+    assert.equal(isTokenDelta({ type: 'tool-call-delta', argumentsDelta: '' }), false)
+    assert.equal(isTokenDelta({ type: 'block-start' }), false)
+    assert.equal(isTokenDelta({ type: 'usage' }), false)
+    assert.equal(isTokenDelta(null), false)
   })
 
   it('finds fork boundaries at completed turns', () => {

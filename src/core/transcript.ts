@@ -293,6 +293,22 @@ export interface UsageTotals {
   cacheMiss?: number
   cacheRate?: string
   tps?: number
+  turnTps?: number
+}
+
+/** True when the chunk contains a non-empty token delta (text/reasoning/tool), matching DSH. */
+export function isTokenDelta(chunk: unknown): boolean {
+  if (typeof chunk !== 'object' || chunk === null) return false
+  const c = chunk as Record<string, unknown>
+  switch (c.type) {
+    case 'text-delta':
+    case 'reasoning-delta':
+      return typeof c.text === 'string' && c.text !== ''
+    case 'tool-call-delta':
+      return (typeof c.argumentsDelta === 'string' && c.argumentsDelta !== '') || c.name !== undefined
+    default:
+      return false
+  }
 }
 
 /** Extract prompt cache hits and misses across provider usage formats. */
@@ -346,7 +362,8 @@ export function formatCacheHitRate(hit: number, uncachedInput: number, miss = 0)
 /**
  * Fold token usage: committed per-message records win; otherwise sum the
  * token-level usage chunks (never both — they describe the same calls).
- * Also aggregates cache hit rate and average generation speed.
+ * Also aggregates cache hit rate and generation speed (decode throughput),
+ * matching DSH Web GUI and backend sessionStats projection.
  * @param events - the session log in seq order.
  */
 export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
@@ -363,6 +380,12 @@ export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
   const turnStarts: number[] = []
   let totalTurnSec = 0
 
+  let openStep: { turn: number; step: number; startTime: number; firstTokenTime?: number } | undefined = undefined
+  let decodeMs = 0
+  let decodeTokens = 0
+  const turnFolds = new Map<number, { decodeMs: number; outputTokens: number }>()
+  let lastTurn: number | undefined = undefined
+
   for (const event of events) {
     if (event.type === 'turn/start') {
       if (typeof event.time === 'number') turnStarts.push(event.time)
@@ -371,21 +394,23 @@ export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
       if (start !== undefined && typeof event.time === 'number' && event.time > start) {
         totalTurnSec += (event.time - start) / 1000
       }
-    } else if (event.type === 'assistant/message') {
-      responses++
-      const data = event.data as { usage?: Record<string, unknown> }
-      const usage = data?.usage
-      if (usage !== undefined && typeof usage.inputTokens === 'number') {
-        sawMessage = true
-        input += usage.inputTokens
-        output += typeof usage.outputTokens === 'number' ? usage.outputTokens : 0
-        const c = extractCacheTokens(usage)
-        cacheHit += c.hit
-        cacheMiss += c.miss
+    } else if (event.type === 'step/start') {
+      const data = event.data as { turn?: unknown; step?: unknown }
+      openStep = {
+        turn: typeof data?.turn === 'number' ? data.turn : 0,
+        step: typeof data?.step === 'number' ? data.step : 0,
+        startTime: typeof event.time === 'number' ? event.time : 0,
       }
     } else if (event.type === 'assistant/chunk') {
-      const chunk = (event.data as { chunk?: { type?: string; usage?: Record<string, unknown> } }).chunk
-      const usage = chunk?.type === 'usage' ? chunk.usage : undefined
+      const chunk = (event.data as { chunk?: StreamChunk; turn?: unknown; step?: unknown }).chunk
+      if (openStep !== undefined && openStep.firstTokenTime === undefined) {
+        const turn = typeof (event.data as { turn?: unknown })?.turn === 'number' ? (event.data as { turn: number }).turn : openStep.turn
+        const step = typeof (event.data as { step?: unknown })?.step === 'number' ? (event.data as { step: number }).step : openStep.step
+        if (turn === openStep.turn && step === openStep.step && isTokenDelta(chunk)) {
+          openStep.firstTokenTime = typeof event.time === 'number' ? event.time : openStep.startTime
+        }
+      }
+      const usage = chunk?.type === 'usage' ? (chunk as { usage?: Record<string, unknown> }).usage : undefined
       if (usage !== undefined && typeof usage.inputTokens === 'number') {
         chunkInput += usage.inputTokens
         chunkOutput += typeof usage.outputTokens === 'number' ? usage.outputTokens : 0
@@ -393,6 +418,41 @@ export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
         chunkCacheHit += c.hit
         chunkCacheMiss += c.miss
       }
+    } else if (event.type === 'assistant/message') {
+      responses++
+      const data = event.data as { usage?: Record<string, unknown>; turn?: unknown; step?: unknown }
+      const usage = data?.usage
+      const out = typeof usage?.outputTokens === 'number' && usage.outputTokens > 0 ? usage.outputTokens : 0
+      if (usage !== undefined && typeof usage.inputTokens === 'number') {
+        sawMessage = true
+        input += usage.inputTokens
+        output += out
+        const c = extractCacheTokens(usage)
+        cacheHit += c.hit
+        cacheMiss += c.miss
+      }
+      if (openStep !== undefined && typeof event.time === 'number') {
+        const firstToken = openStep.firstTokenTime ?? (openStep.startTime > 0 ? openStep.startTime : undefined)
+        if (firstToken !== undefined && event.time >= firstToken) {
+          let stepDecodeMs = event.time - firstToken
+          if (stepDecodeMs === 0 && openStep.startTime > 0 && event.time > openStep.startTime) {
+            stepDecodeMs = event.time - openStep.startTime
+          }
+          if (stepDecodeMs > 0 && out > 0) {
+            decodeMs += stepDecodeMs
+            decodeTokens += out
+            const turn = openStep.turn
+            lastTurn = turn
+            const cur = turnFolds.get(turn) ?? { decodeMs: 0, outputTokens: 0 }
+            cur.decodeMs += stepDecodeMs
+            cur.outputTokens += out
+            turnFolds.set(turn, cur)
+          }
+        }
+      }
+      openStep = undefined
+    } else if (event.type === 'step/end') {
+      openStep = undefined
     }
   }
 
@@ -407,8 +467,16 @@ export function foldUsage(events: readonly SessionEvent[]): UsageTotals {
     totals.cacheMiss = finalCacheMiss
     totals.cacheRate = formatCacheHitRate(finalCacheHit, finalInput, finalCacheMiss)
   }
-  if (totalTurnSec > 0 && finalOutput > 0) {
-    totals.tps = Math.round(finalOutput / totalTurnSec)
+  if (decodeMs > 0 && decodeTokens > 0) {
+    totals.tps = Math.max(1, Math.round(decodeTokens / (decodeMs / 1000)))
+  } else if (totalTurnSec > 0 && finalOutput > 0) {
+    totals.tps = Math.max(1, Math.round(finalOutput / totalTurnSec))
+  }
+  if (lastTurn !== undefined) {
+    const turnData = turnFolds.get(lastTurn)
+    if (turnData !== undefined && turnData.decodeMs > 0 && turnData.outputTokens > 0) {
+      totals.turnTps = Math.max(1, Math.round(turnData.outputTokens / (turnData.decodeMs / 1000)))
+    }
   }
   return totals
 }
@@ -474,9 +542,24 @@ export class LiveFeed {
   private echoes: Block[] = []
   private echoSeq = 0
   tokens: { inputTokens: number; outputTokens: number; [key: string]: unknown } | undefined = undefined
+  private firstTokenTime: number | undefined = undefined
+  private lastSettledTps: number | undefined = undefined
 
   get liveText(): string { return this.text }
   get liveReasoning(): string { return this.reasoning }
+
+  /** Current generation speed during live streaming, or last settled turn TPS. */
+  liveTps(fallbackStart?: number): number | undefined {
+    const startTime = this.firstTokenTime ?? fallbackStart
+    if (startTime !== undefined) {
+      const elapsed = (Date.now() - startTime) / 1000
+      if (elapsed >= 0.3) {
+        const outTokens = this.tokens?.outputTokens ?? Math.round((this.text.length + this.reasoning.length) / 3.5)
+        if (outTokens > 0) return Math.max(1, Math.round(outTokens / elapsed))
+      }
+    }
+    return this.lastSettledTps
+  }
 
   /** Live prompt cache hit rate when reported in streaming usage chunks. */
   cacheRate(): string | undefined {
@@ -507,6 +590,9 @@ export class LiveFeed {
 
   /** Consume one provider-neutral stream chunk. */
   pushChunk(chunk: StreamChunk): void {
+    if (isTokenDelta(chunk) && this.firstTokenTime === undefined) {
+      this.firstTokenTime = Date.now()
+    }
     switch (chunk.type) {
       case 'text-delta':
         if (chunk.text === '') return
@@ -564,8 +650,16 @@ export class LiveFeed {
       }
     }
     if (sawMessage) {
+      if (this.firstTokenTime !== undefined) {
+        const elapsed = Math.max(0.1, (Date.now() - this.firstTokenTime) / 1000)
+        const outTokens = this.tokens?.outputTokens ?? Math.round((this.text.length + this.reasoning.length) / 3.5)
+        if (outTokens > 0) {
+          this.lastSettledTps = Math.max(1, Math.round(outTokens / elapsed))
+        }
+      }
       this.text = ''
       this.reasoning = ''
+      this.firstTokenTime = undefined
     }
     if (settled.size > 0) this.tools = this.tools.filter(t => t.callId === undefined || !settled.has(t.callId))
     this.committed = projectEvents(events)
@@ -583,6 +677,8 @@ export class LiveFeed {
     this.tokens = undefined
     this.echoes = []
     this.snapshotCache = undefined
+    this.firstTokenTime = undefined
+    this.lastSettledTps = undefined
     this.emit()
   }
 

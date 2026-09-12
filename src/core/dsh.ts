@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { createModelSwitchNotice, createUserMessage } from './messages.js'
-import { LiveFeed } from './transcript.js'
+import { LiveFeed, foldUsage } from './transcript.js'
 import {
   hasMethod,
   readSessionEvents,
@@ -848,23 +848,32 @@ export class Dsh {
   /** Decode throughput / session stats from durable projections (parity with Web GUI). */
   readSessionStats(session: DshSession): { decodeMs?: number; decodeTokens?: number; tps?: number } | undefined {
     const projections = service<Record<string, unknown>>(this.ctx, 'sessionProjections')
-    if (projections === undefined) return undefined
-    try {
-      let stats: { decodeMs?: number; decodeTokens?: number } | undefined
-      if (hasMethod(projections, 'stateOf')) {
-        stats = (projections.stateOf as (s: DshSession, key: string) => unknown).call(projections, session, 'sessionStats') as typeof stats
-      } else if (hasMethod(projections, 'snapshot')) {
-        const snap = (projections.snapshot as (s: DshSession) => unknown).call(projections, session) as {
-          values?: { sessionStats?: typeof stats }
+    if (projections !== undefined) {
+      try {
+        let stats: { decodeMs?: number; decodeTokens?: number } | undefined
+        if (hasMethod(projections, 'stateOf')) {
+          stats = (projections.stateOf as (s: DshSession, key: string) => unknown).call(projections, session, 'sessionStats') as typeof stats
+        } else if (hasMethod(projections, 'snapshot')) {
+          const snap = (projections.snapshot as (s: DshSession) => unknown).call(projections, session) as {
+            values?: { sessionStats?: typeof stats }
+          }
+          stats = snap?.values?.sessionStats
         }
-        stats = snap?.values?.sessionStats
+        if (stats !== undefined && typeof stats.decodeMs === 'number' && typeof stats.decodeTokens === 'number') {
+          const tps = stats.decodeMs > 0 ? Math.round(stats.decodeTokens / (stats.decodeMs / 1000)) : undefined
+          return { decodeMs: stats.decodeMs, decodeTokens: stats.decodeTokens, tps }
+        }
+      } catch {
+        // Fall through to events fold
       }
-      if (stats !== undefined && typeof stats.decodeMs === 'number' && typeof stats.decodeTokens === 'number') {
-        const tps = stats.decodeMs > 0 ? Math.round(stats.decodeTokens / (stats.decodeMs / 1000)) : undefined
-        return { decodeMs: stats.decodeMs, decodeTokens: stats.decodeTokens, tps }
+    }
+    const events = readSessionEvents(session)
+    if (events.length > 0) {
+      const totals = foldUsage(events)
+      const tps = totals.turnTps ?? totals.tps
+      if (tps !== undefined && tps > 0) {
+        return { tps }
       }
-    } catch {
-      return undefined
     }
     return undefined
   }

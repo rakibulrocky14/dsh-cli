@@ -238,7 +238,7 @@ export declare class Engine {
     reopen(startup: StartupValues): Promise<void>;
     /** Wire stream + model listeners around an adopted handle. */
     private adopt;
-    /** Refresh cached status-bar readings (context pressure, mode, cache hit rate). */
+    /** Refresh cached status-bar readings (context pressure, mode, cache hit rate, TPS). */
     private refreshStatus;
     /**
      * Resolve the current model's context window for the ctx % meter. Cached

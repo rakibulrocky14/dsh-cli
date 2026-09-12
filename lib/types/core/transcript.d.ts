@@ -87,7 +87,10 @@ export interface UsageTotals {
     cacheMiss?: number;
     cacheRate?: string;
     tps?: number;
+    turnTps?: number;
 }
+/** True when the chunk contains a non-empty token delta (text/reasoning/tool), matching DSH. */
+export declare function isTokenDelta(chunk: unknown): boolean;
 /** Extract prompt cache hits and misses across provider usage formats. */
 export declare function extractCacheTokens(usage: unknown): {
     hit: number;
@@ -104,7 +107,8 @@ export declare function formatCacheHitRate(hit: number, uncachedInput: number, m
 /**
  * Fold token usage: committed per-message records win; otherwise sum the
  * token-level usage chunks (never both — they describe the same calls).
- * Also aggregates cache hit rate and average generation speed.
+ * Also aggregates cache hit rate and generation speed (decode throughput),
+ * matching DSH Web GUI and backend sessionStats projection.
  * @param events - the session log in seq order.
  */
 export declare function foldUsage(events: readonly SessionEvent[]): UsageTotals;
@@ -139,8 +143,12 @@ export declare class LiveFeed {
         outputTokens: number;
         [key: string]: unknown;
     } | undefined;
+    private firstTokenTime;
+    private lastSettledTps;
     get liveText(): string;
     get liveReasoning(): string;
+    /** Current generation speed during live streaming, or last settled turn TPS. */
+    liveTps(fallbackStart?: number): number | undefined;
     /** Live prompt cache hit rate when reported in streaming usage chunks. */
     cacheRate(): string | undefined;
     /**
