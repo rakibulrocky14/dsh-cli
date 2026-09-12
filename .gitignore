@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Internal / environment cache
+.mimosa/
+.DS_Store
+
+# Logs
+*.log

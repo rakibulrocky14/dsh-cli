@@ -21,11 +21,43 @@
     - id: code-runtime
       name: '@deepseek-ai/dsh-code-runtime-worker-thread'
 
+    # Cordis inspect and dynamic runner for creator mode (cordis preset).
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
+
+    # Durable storage + workspace registry: the same rows (same ids) as the
+    # installed Web bundle, so terminal sessions share Web's per-directory
+    # workspaces and `ctx.workspaceRegistry`. The registry persists through
+    # storage-domain over the json backend. When these rows are absent (older
+    # compositions) sessions stay unattached instead of failing.
+    - id: storage
+      name: '@deepseek-ai/dsh-storage'
+
+    - id: storage-json
+      name: '@deepseek-ai/dsh-storage-json'
+      config:
+        root: !!js dshHomePath('storages')
+
+    - id: storage-domain
+      name: '@deepseek-ai/dsh-storage-domain'
+      config:
+        backend: json
+
+    - id: workspace
+      name: '@deepseek-ai/dsh-workspace'
+
     # The model-facing ask_user_question tool (a preset row on web; the
     # rosterless terminal composes it process-wide so the agent can ask).
     # Answered by this surface's userQuestions provider (modal/form).
     - id: tool-ask-user
       name: '@deepseek-ai/dsh-tool-ask-user'
+
+    # The preset roster: shipped presets (standard, code, minimal, cordis)
+    # plus locally authored user presets from $DSH_HOME/.agent-presets.
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
 
     # Parses terminal app flags, then provides terminalStartup.
     - id: terminal-startup
@@ -41,3 +73,4 @@
         provider: !!js ctx.terminalStartup.provider
         print: !!js ctx.terminalStartup.print
         line: !!js ctx.terminalStartup.line
+        preset: !!js ctx.terminalStartup.preset

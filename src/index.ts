@@ -39,6 +39,8 @@ export interface Config {
   print: string
   /** Force the line REPL even on a TTY. */
   line: boolean
+  /** Initial agent preset to compose, or empty for default. */
+  preset?: string
 }
 
 /** Normalize raw patch config (missing keys default to empty/off). */
@@ -48,6 +50,7 @@ function normalizeConfig(config: Partial<Config> | undefined): StartupValues & {
     model: typeof config?.model === 'string' ? config.model : '',
     provider: typeof config?.provider === 'string' ? config.provider : '',
     print: typeof config?.print === 'string' ? config.print : '',
+    preset: typeof config?.preset === 'string' ? config.preset : '',
     line: config?.line === true,
   }
 }

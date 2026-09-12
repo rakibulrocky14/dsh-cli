@@ -7,13 +7,14 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
+import { parseMarkdown } from '../core/markdown.js'
 import { parseInline, splitFences, summarizeArgs, type Block } from '../core/transcript.js'
 import { spinnerGlyph, type Field, type Modal, type Row, type Toast } from './engine.js'
 
 /** Semantic palette (chalk honors NO_COLOR automatically). */
 export const theme = {
-  accent: 'cyan',
-  user: 'cyan',
+  accent: '#4d6bfe',
+  user: '#4d6bfe',
   thinking: 'gray',
   code: 'gray',
   success: 'green',
@@ -21,7 +22,7 @@ export const theme = {
   error: 'red',
   muted: 'gray',
   border: 'gray',
-  selection: 'cyan',
+  selection: '#4d6bfe',
   glyph: 'magenta',
 } as const
 
@@ -59,13 +60,13 @@ export function Banner({ model, effort, cwd, recent, width = MAX_CONTENT }: {
   recent?: string
   width?: number
 }): React.JSX.Element {
-  const boxWidth = Math.min(Math.max(40, width), MAX_CONTENT)
+  const boxWidth = Math.max(40, width)
   const whaleWidth = WHALE.reduce((n, line) => Math.max(n, displayLen(line)), 0)
   const leftWidth = whaleWidth + 2
   const rightWidth = Math.max(16, boxWidth - leftWidth - 2)
   const info = `${model === '' ? 'unknown model' : model} · ${effort === '' ? 'auto' : effort}`
   return (
-    <Box flexDirection="column" width={boxWidth} marginTop={1} marginBottom={1}>
+    <Box flexDirection="column" width={boxWidth}>
       <Box flexDirection="row" width={boxWidth} alignItems="flex-start">
         <Box flexDirection="column" width={leftWidth} marginRight={2} alignItems="center">
           {WHALE.map((line, i) => (
@@ -146,21 +147,6 @@ export function parseToolArgs(argsText: string, max = 96): ParsedToolArgs {
   return { oneLine: clipWidth(oneLine, max), path, content }
 }
 
-/** Markdown-ish text: fenced code dimmed, inline bold/code spans. */
-export function RichText({ text, dimmed = false }: { text: string; dimmed?: boolean }): React.JSX.Element {
-  const sections = splitFences(text)
-  return (
-    <Text dimColor={dimmed}>
-      {sections.map((section, i) => (
-        <Text key={i} dimColor={dimmed || section.code} color={section.code ? theme.code : undefined}>
-          {section.code ? section.text.split('\n').map(line => `  ${line}`).join('\n') : section.text}
-          {i < sections.length - 1 ? '\n' : ''}
-        </Text>
-      ))}
-    </Text>
-  )
-}
-
 /** Inline spans (bold/code) for short single-paragraph text. */
 export function InlineText({ text, dimmed = false }: { text: string; dimmed?: boolean }): React.JSX.Element {
   return (
@@ -169,6 +155,107 @@ export function InlineText({ text, dimmed = false }: { text: string; dimmed?: bo
         <Text key={i} bold={segment.bold} dimColor={dimmed || segment.code}>{segment.text}</Text>
       ))}
     </Text>
+  )
+}
+
+/** One markdown table as a padded column grid. */
+function MarkdownTable({ headers, rows, width, dimmed }: {
+  headers: string[]
+  rows: string[][]
+  width: number
+  dimmed: boolean
+}): React.JSX.Element {
+  const cols = Math.max(1, headers.length, ...rows.map(r => r.length))
+  const cells = (row: string[]): string[] => Array.from({ length: cols }, (_, i) => row[i] ?? '')
+  const raw = [cells(headers), ...rows.map(cells)]
+  const budget = Math.max(12, width)
+  const colW = raw[0]!.map((_, c) => Math.min(28, Math.max(3, ...raw.map(r => displayLen(r[c] ?? '')))))
+  const total = colW.reduce((n, w) => n + w, 0) + Math.max(0, cols - 1) * 3
+  const scale = total > budget ? budget / total : 1
+  const widths = colW.map(w => Math.max(3, Math.floor(w * scale)))
+  const pad = (cell: string, w: number): string => {
+    const clipped = clipWidth(cell.replace(/\*\*/g, '').replace(/`/g, ''), w)
+    return clipped + ' '.repeat(Math.max(0, w - displayLen(clipped)))
+  }
+  const line = (row: string[]): string => row.map((c, i) => pad(c, widths[i]!)).join(' · ')
+  return (
+    <Box flexDirection="column" marginTop={1} marginBottom={1}>
+      <Text bold color={dimmed ? undefined : theme.accent} dimColor={dimmed}>{line(cells(headers))}</Text>
+      <Text dimColor>{widths.map(w => '─'.repeat(w)).join('─┼─')}</Text>
+      {rows.map((row, i) => (
+        <Text key={i} dimColor={dimmed}>{line(cells(row))}</Text>
+      ))}
+    </Box>
+  )
+}
+
+/**
+ * Markdown-aware assistant text: headings, tables, lists, quotes, fences,
+ * and inline bold/code — the same family of chrome other TUIs show instead
+ * of dumping raw `|` / `##` source.
+ */
+export function RichText({ text, dimmed = false, width = MAX_CONTENT }: {
+  text: string
+  dimmed?: boolean
+  width?: number
+}): React.JSX.Element {
+  const sections = splitFences(text)
+  return (
+    <Box flexDirection="column">
+      {sections.map((section, i) => {
+        if (section.code) {
+          return (
+            <Box key={i} flexDirection="column" marginY={1}>
+              {section.lang === '' ? undefined : <Text dimColor>  {section.lang}</Text>}
+              <Text dimColor={dimmed} color={theme.code}>{section.text.split('\n').map(line => `  ${line}`).join('\n')}</Text>
+            </Box>
+          )
+        }
+        return (
+          <Box key={i} flexDirection="column">
+            {parseMarkdown(section.text).map((block, j) => {
+              switch (block.kind) {
+                case 'heading':
+                  return (
+                    <Box key={j} marginTop={j === 0 ? 0 : 1}>
+                      <Text bold color={dimmed ? undefined : theme.accent} dimColor={dimmed}>{block.text}</Text>
+                    </Box>
+                  )
+                case 'hr':
+                  return <Text key={j} dimColor>{'─'.repeat(Math.min(24, Math.max(8, width - 4)))}</Text>
+                case 'quote':
+                  return (
+                    <Box key={j} flexDirection="column" marginLeft={1}>
+                      {block.lines.map((line, k) => (
+                        <Text key={k} dimColor italic>│ {line}</Text>
+                      ))}
+                    </Box>
+                  )
+                case 'list':
+                  return (
+                    <Box key={j} flexDirection="column">
+                      {block.items.map((item, k) => (
+                        <Text key={k} dimColor={dimmed}>
+                          {block.ordered ? `${String(k + 1)}. ` : '· '}
+                          <InlineText text={item} dimmed={dimmed} />
+                        </Text>
+                      ))}
+                    </Box>
+                  )
+                case 'table':
+                  return <MarkdownTable key={j} headers={block.headers} rows={block.rows} width={width} dimmed={dimmed} />
+                case 'para':
+                  return (
+                    <Box key={j} marginTop={j === 0 ? 0 : 1}>
+                      <InlineText text={block.text} dimmed={dimmed} />
+                    </Box>
+                  )
+              }
+            })}
+          </Box>
+        )
+      })}
+    </Box>
   )
 }
 
@@ -221,7 +308,7 @@ export function BlockView({ block, width = MAX_CONTENT, expanded = false, spinne
         <Box flexDirection="column">
           {block.live ? <Text color={theme.success}>✻ assistant</Text> : undefined}
           {body.hidden > 0 ? <Text dimColor>… +{String(body.hidden)} lines above</Text> : undefined}
-          <RichText text={body.text} />
+          <RichText text={body.text} width={width} />
         </Box>
       )
     }
@@ -278,7 +365,7 @@ export function BlockView({ block, width = MAX_CONTENT, expanded = false, spinne
     case 'divider': {
       // Centered session marker inside the padded content column.
       const label = ` ${block.label} `
-      const rule = Math.min(Math.max(20, width), MAX_CONTENT)
+      const rule = Math.max(20, width)
       const fill = Math.max(0, rule - displayLen(label))
       const left = Math.floor(fill / 2)
       return (
@@ -506,13 +593,13 @@ export function terminalWidth(stdoutColumns?: number): number {
  * @param stdoutRows - rows reported by Ink's stdout handle.
  */
 export function terminalHeight(stdoutRows?: number): number {
-  return pickWidth([
+  return Math.max(12, pickWidth([
     stdoutRows,
     process.stdout?.rows,
     process.stderr?.rows,
     Number(process.env.LINES),
     24,
-  ])
+  ]))
 }
 
 /**
@@ -573,11 +660,20 @@ export function FieldView({ label, field, focused, placeholder = '' }: {
 }
 
 /**
- * Main chat composer: a rounded box with a prompt glyph inside, matching
- * the Claude-Code input chrome. While a turn runs the border warms and the
- * glyph becomes a spinner so steering stays visually distinct from send.
+ * Main chat composer: two-row card with prompt on top and model badge + key hints below.
+ * While a turn runs the border warms and the glyph becomes a spinner.
  */
-export function Composer({ field, focused = true, running = false, spinnerFrame = 0, runSeconds = 0, width = MAX_CONTENT, placeholder }: {
+export function Composer({
+  field,
+  focused = true,
+  running = false,
+  spinnerFrame = 0,
+  runSeconds = 0,
+  width = MAX_CONTENT,
+  placeholder,
+  model,
+  effort,
+}: {
   field: Field
   focused?: boolean
   running?: boolean
@@ -585,22 +681,51 @@ export function Composer({ field, focused = true, running = false, spinnerFrame 
   runSeconds?: number
   width?: number
   placeholder?: string
+  model?: string
+  effort?: string
 }): React.JSX.Element {
   const idleHint = 'Message (/ for commands)'
   const runHint = 'Steer the turn…'
   const label = running ? spinnerGlyph(spinnerFrame) : '❯'
+  const innerWidth = Math.max(20, width - 4)
+  const leftTag = running
+    ? `${spinnerGlyph(spinnerFrame)} working ${String(runSeconds)}s`
+    : model !== undefined && model !== ''
+      ? effort ? `${model} · ${effort}` : model
+      : ''
+  const rightTag = running ? 'typing steers · ctrl-c stops' : 'enter ↵ send · / commands'
+  const showRight = innerWidth >= displayLen(leftTag) + displayLen(rightTag) + 4
+  const showLeft = innerWidth >= displayLen(leftTag) + 2
+
   return (
-    <Box flexDirection="column" width={width} marginTop={1}>
-      {running ? (
-        <Text color={theme.warn}>  {spinnerGlyph(spinnerFrame)} working {String(runSeconds)}s</Text>
-      ) : undefined}
-      <Box borderStyle="round" borderColor={running ? theme.warn : theme.accent} paddingX={1} width={width}>
-        <FieldView
-          label={label}
-          field={field}
-          focused={focused}
-          placeholder={placeholder ?? (running ? runHint : idleHint)}
-        />
+    <Box flexDirection="column" width={width}>
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={running ? theme.warn : theme.accent}
+        paddingX={1}
+        width={width}
+      >
+        <Box flexDirection="row" width={innerWidth}>
+          <FieldView
+            label={label}
+            field={field}
+            focused={focused}
+            placeholder={placeholder ?? (running ? runHint : idleHint)}
+          />
+        </Box>
+        <Box flexDirection="row" justifyContent="space-between" width={innerWidth} marginTop={1}>
+          <Box>
+            {running ? (
+              <Text color={theme.warn}>{leftTag}</Text>
+            ) : showLeft && leftTag !== '' ? (
+              <Text color={theme.accent}>◈ {clipWidth(leftTag, innerWidth - (showRight ? displayLen(rightTag) + 2 : 0))}</Text>
+            ) : undefined}
+          </Box>
+          <Box>
+            {showRight ? <Text dimColor>{rightTag}</Text> : undefined}
+          </Box>
+        </Box>
       </Box>
     </Box>
   )
@@ -678,7 +803,7 @@ export function Panel({ title, rows, loading, hint, index, maxRows = 20, spinner
   const visible = rows.slice(start, start + maxRows)
   const usable = Math.max(20, width - 4)
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} marginTop={1} width={width}>
+    <Box flexDirection="column" borderStyle="round" borderColor={theme.border} paddingX={1} width={width}>
       <Text bold color={theme.accent}>▸ {clipWidth(title, usable)}{rows.length > 0 && !loading ? <Text dimColor> ({String(rows.length)})</Text> : undefined}</Text>
       {loading ? <Text dimColor>{spinnerGlyph(spinnerFrame)} loading…</Text> : undefined}
       {!loading && rows.length === 0 ? <Text dimColor>(empty)</Text> : undefined}
@@ -789,7 +914,7 @@ export function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, running
       ? '↑↓ select · enter open · esc back'
       : running
         ? 'typing steers · ctrl-c stops'
-        : 'enter send · / commands · ctrl+o expand · ctrl-d quit'
+        : 'enter send · wheel/pgup scroll · / commands · ctrl-d quit'
   // One column of guard: the status must never touch the last cell, where a
   // wide-glyph surprise would wrap the line and desync the repaint.
   const fit = fitStatus(Math.max(24, width - 1), { model, effort, cwd, ctxTokens, ctxWindow, mode })

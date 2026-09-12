@@ -14,6 +14,7 @@ export type View = {
     name: 'chat';
 } | {
     name: 'sessions';
+    workspace?: string;
 } | {
     name: 'model';
     provider?: string;
@@ -161,6 +162,12 @@ export declare class Engine {
     rowsLoading: boolean;
     rowsHint: string;
     rowIndex: number;
+    /** Cached, filtered session corpus backing the sessions browser. */
+    private sessionRecordsCache;
+    /** Workspace rows when the sessions browser is at root (id → display data). */
+    private sessionWorkspaces;
+    /** Fixed-frame transcript offset: 0 follows bottom, positive scrolls upward. */
+    transcriptScroll: number;
     modals: Modal[];
     toasts: Toast[];
     composer: Field;
@@ -208,6 +215,10 @@ export declare class Engine {
      * Used by the resize resync (`wipeScrollback`) and the ctrl+o expand toggle.
      */
     requestRepaint(wipeScrollback?: boolean): void;
+    /** Clamp and set the transcript scroll offset (App clamps to measured max). */
+    setTranscriptScroll(value: number): void;
+    /** Scroll the transcript by a delta (positive = rows older, away from bottom). */
+    scrollTranscript(delta: number): void;
     /** Best-effort one-liner about the most recent persisted session. */
     private loadRecentActivity;
     /** Flip the tool-output expansion and repaint the whole frame. */
@@ -251,23 +262,40 @@ export declare class Engine {
     /** Open a panel view and load its rows. */
     openView(view: View): void;
     private loadView;
+    /** Registry workspace record shape the facade may expose (all fields optional-tolerant). */
+    private workspaceRegistry;
+    private workspaceForSession;
     /** Live-preferred session corpus, newest first (sessionQuery, else manual merge). */
     private sessionRecords;
+    private sessionOrigin;
     /** Best-known name for one session: live log fold, else the cached read. */
     private sessionTitle;
     /**
-     * Name-first row, web-parity labeling: durable title, else the project
-     * basename (what the web shows for untitled sessions), with the short id,
-     * age, and project as the detail line.
+     * Filter records for the browser: drop archived sessions and subagent
+     * transcripts. SessionListRecord currently lacks `origin`, so read it
+     * defensively — the facade may add it later.
+     */
+    private visibleSessionRecords;
+    /**
+     * Name-first child row: primary title (or 'New Session' fallback), short
+     * id only as the secondary, current/live badge. No age, cwd, or full id.
      */
     private sessionRow;
-    private buildSessionRows;
+    /** Group visible records into project rows in durable registry order. */
+    private sessionProjectRows;
+    /** Load the sessions browser: root project rows or one workspace's chats. */
+    private loadSessionsView;
+    /** Re-render child rows after async titles land, without touching root rows. */
+    private refreshSessionChildRows;
     /**
      * Read persisted-session names in one batched background call (cached
      * across opens, '' = known untitled); rows update once when it lands.
-     * Selection follows the session id, never a row index.
+     * Selection follows the session id, never a row index. Root project rows
+     * are never rewritten by title fills — only child rows re-render.
      */
     private fillSessionTitles;
+    /** Human project title for the active sessions child view. */
+    sessionWorkspaceTitle(): string | undefined;
     /** Activate the selected panel row. */
     activateRow(): void;
     /**

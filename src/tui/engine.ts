@@ -10,13 +10,13 @@
 import { join } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { BUILTINS, normalizeEffort, parseModelSelection, shortSession } from '../core/commands.js'
-import { Dsh, attachLiveStream, dshHome, installModelOverride, listProfilePlugins, sendFollowup, sendSteer, type SessionListRecord, type StartupValues } from '../core/dsh.js'
+import { Dsh, attachLiveStream, dshHome, installModelOverride, listProfilePlugins, presetDisplayText, sendFollowup, sendSteer, type SessionListRecord, type StartupValues } from '../core/dsh.js'
 import { LiveFeed, foldTodos, foldUsage } from '../core/transcript.js'
 import { readSessionEvents, type AskItem, type DshAgent, type DshAgentHandle, type DshContext, type ModelSelection, type ModelSelectionRef } from '../core/types.js'
 
 /** Panel views; settings drills into one namespace. */
 export type View = { name: 'chat' }
-  | { name: 'sessions' } | { name: 'model'; provider?: string } | { name: 'effort' } | { name: 'tools' } | { name: 'commands' }
+  | { name: 'sessions'; workspace?: string } | { name: 'model'; provider?: string } | { name: 'effort' } | { name: 'tools' } | { name: 'commands' }
   | { name: 'skills' } | { name: 'agents' } | { name: 'terminals' } | { name: 'todos' } | { name: 'usage' }
   | { name: 'presets' } | { name: 'plugins' } | { name: 'settings'; ns?: string }
   | { name: 'permissions' } | { name: 'jobs' } | { name: 'doctor' } | { name: 'help' }
@@ -217,6 +217,12 @@ export class Engine {
   rowsLoading = false
   rowsHint = ''
   rowIndex = 0
+  /** Cached, filtered session corpus backing the sessions browser. */
+  private sessionRecordsCache: SessionListRecord[] = []
+  /** Workspace rows when the sessions browser is at root (id → display data). */
+  private sessionWorkspaces: { key: string; title: string; count: number; current: boolean }[] = []
+  /** Fixed-frame transcript offset: 0 follows bottom, positive scrolls upward. */
+  transcriptScroll = 0
 
   modals: Modal[] = []
   toasts: Toast[] = []
@@ -257,6 +263,9 @@ export class Engine {
     } catch {
       this.history = []
     }
+    // New committed/live output never touches transcriptScroll: a reader at
+    // the bottom (0) keeps following, and a scrolled-up reader keeps their
+    // place until they jump back with Ctrl+End. App clamps to measured max.
     this.feed.subscribe(() => { this.emit() })
   }
 
@@ -321,6 +330,20 @@ export class Engine {
     this.emit()
   }
 
+  /** Clamp and set the transcript scroll offset (App clamps to measured max). */
+  setTranscriptScroll(value: number): void {
+    const next = !Number.isFinite(value) ? 0 : Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value)))
+    if (next === this.transcriptScroll) return
+    this.transcriptScroll = next
+    this.emit()
+  }
+
+  /** Scroll the transcript by a delta (positive = rows older, away from bottom). */
+  scrollTranscript(delta: number): void {
+    if (!Number.isFinite(delta) || delta === 0) return
+    this.setTranscriptScroll(this.transcriptScroll + delta)
+  }
+
   /** Best-effort one-liner about the most recent persisted session. */
   private async loadRecentActivity(): Promise<void> {
     try {
@@ -377,6 +400,7 @@ export class Engine {
     try {
       await this.dsh.awaitReady()
       void this.loadRecentActivity()
+      this.preset = startup.preset ?? this.dsh.defaultPresetId() ?? ''
       await this.reopen(startup)
       this.dsh.onApproval(
         (request) => this.askApproval(request.toolName, request.reason ?? '', request.callId),
@@ -401,7 +425,8 @@ export class Engine {
     this.detachModel?.()
     this.detachModel = undefined
     if (this.owned !== undefined) await this.owned.dispose()
-    this.owned = await this.dsh.openAgent(startup, this.preset === '' ? undefined : this.preset)
+    const wantedPreset = (startup.preset ?? '') !== '' ? startup.preset : (this.preset === '' ? undefined : this.preset)
+    this.owned = await this.dsh.openAgent(startup, wantedPreset)
     await this.adopt(this.owned)
   }
 
@@ -420,9 +445,9 @@ export class Engine {
     this.pluginCommands = this.dsh.listCommands(agent).map(c => ({ name: c.name, desc: c.description }))
     this.refreshStatus()
     void this.refreshCtxWindow()
-    const preset = this.dsh.sessionPreset(agent.session)
-    if (preset !== undefined) {
-      this.toast(`note: this session runs preset "${preset}" on web; the terminal composes the base tool set`, 'warn', 8000)
+    const sessionPreset = this.dsh.sessionPreset(agent.session)
+    if (sessionPreset !== undefined && sessionPreset !== '') {
+      this.preset = sessionPreset
     }
     this.emit()
   }
@@ -514,9 +539,11 @@ export class Engine {
     this.runStartValue = Date.now()
     const current = agent
     sendFollowup(current, trimmed)
-    void current.whenIdle().then(() => {
+    void current.whenIdle().then(async () => {
       if (this.agent !== current || this.quitting) return
       this.running = false
+      // Persist the completed turn immediately so on-disk sessions are always up to date.
+      await this.dsh.flush(current.session).catch(() => false)
       this.refreshStatus()
       this.emit()
     })
@@ -530,7 +557,13 @@ export class Engine {
     if (this.paletteDismissed === value) return []
     const query = value.slice(1).toLowerCase()
     const builtins = BUILTINS.filter(b => b.name.startsWith(query)).map(b => ({ ...b, plugin: false }))
-    const plugins = this.pluginCommands.filter(c => c.name.startsWith(query)).map(c => ({ name: c.name, desc: c.desc, plugin: true }))
+    const builtinNames = new Set(BUILTINS.map(b => b.name))
+    // `/session` is the sessions-browser alias; never let a plugin of that
+    // name steal the palette (or dump tool-call traces into the panel).
+    builtinNames.add('session')
+    const plugins = this.pluginCommands
+      .filter(c => c.name.startsWith(query) && !builtinNames.has(c.name))
+      .map(c => ({ name: c.name, desc: c.desc, plugin: true }))
     return [...builtins, ...plugins].slice(0, 12)
   }
 
@@ -552,6 +585,7 @@ export class Engine {
         return
       case 'clear':
         this.cleared = true
+        this.setTranscriptScroll(0)
         this.emit()
         return
       case 'new': {
@@ -565,8 +599,25 @@ export class Engine {
         return
       }
       case 'sessions':
+      case 'session': {
+        // Singular `/session` is the same DSH session browser as `/sessions`.
+        // A trailing id resumes, matching `/resume <id>` — never fall through
+        // to a plugin that dumps tool-call traces.
+        if (rest !== '') {
+          const id = await this.resolveSessionPrefix(rest)
+          if (id === undefined) return
+          agent?.cancel('user')
+          if (agent !== undefined) await agent.whenIdle()
+          this.running = false
+          this.cleared = false
+          await this.reopen({ resume: id, model: '', provider: '', print: '' })
+          this.view = { name: 'chat' }
+          this.toast(`resumed ${id}`, 'ok')
+          return
+        }
         this.openView({ name: 'sessions' })
         return
+      }
       case 'resume': {
         if (rest === '') {
           this.openView({ name: 'sessions' })
@@ -654,7 +705,6 @@ export class Engine {
       case 'terminals':
       case 'todos':
       case 'usage':
-      case 'presets':
       case 'plugins':
       case 'settings':
       case 'permissions':
@@ -662,6 +712,39 @@ export class Engine {
       case 'doctor':
         this.openView({ name: cmd })
         return
+      case 'preset':
+      case 'presets': {
+        if (rest !== '') {
+          const presets = await this.dsh.listPresets()
+          const target = rest.trim().toLowerCase()
+          const found = presets.find(p => p.id.toLowerCase() === target || presetDisplayText(p).name.toLowerCase() === target)
+          if (found === undefined) {
+            this.toast(`unknown preset "${rest}"`, 'warn')
+            return
+          }
+          if (found.broken !== undefined) {
+            this.toast(`preset "${rest}" is broken: ${found.broken}`, 'error')
+            return
+          }
+          this.view = { name: 'chat' }
+          this.emit()
+          try {
+            agent?.cancel('user')
+            if (agent !== undefined) await agent.whenIdle()
+            this.running = false
+            this.preset = found.id
+            this.cleared = false
+            await this.reopen({ resume: '', model: '', provider: '', print: '' })
+            const text = presetDisplayText(found)
+            this.toast(`session composed with preset "${text.name}"`, 'ok')
+          } catch (error) {
+            this.toast(`preset switch failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+          }
+          return
+        }
+        this.openView({ name: 'presets' })
+        return
+      }
       default: {
         if (agent === undefined) {
           this.toast(`unknown command /${cmd}`, 'warn')
@@ -717,10 +800,7 @@ export class Engine {
       case 'chat':
         return
       case 'sessions': {
-        const records = await this.sessionRecords()
-        this.rows = this.buildSessionRows(records).slice(0, 60)
-        this.rowsHint = `${String(records.length)} sessions · enter resumes · esc back`
-        void this.fillSessionTitles(records)
+        await this.loadSessionsView(view.workspace)
         return
       }
       case 'model': {
@@ -841,12 +921,15 @@ export class Engine {
       }
       case 'presets': {
         const presets = await this.dsh.listPresets()
-        this.rows = presets.map(p => ({
-          id: p.id,
-          primary: p.id,
-          secondary: p.description ?? p.name ?? '',
-          badge: p.id === this.preset ? 'active' : p.broken === undefined ? undefined : `broken: ${p.broken}`,
-        }))
+        this.rows = presets.map(p => {
+          const text = presetDisplayText(p)
+          return {
+            id: p.id,
+            primary: text.name !== p.id ? `${text.name} (${p.id})` : p.id,
+            secondary: text.description ?? '',
+            badge: p.id === this.preset ? 'active' : p.broken === undefined ? undefined : `broken: ${p.broken}`,
+          }
+        })
         this.rowsHint = this.rows.length === 0 ? 'no agent presets configured · esc back' : 'enter starts a session with this preset · esc back'
         return
       }
@@ -910,7 +993,7 @@ export class Engine {
       case 'help': {
         this.rows = [
           ...BUILTINS.map(b => ({ id: b.name, primary: `/${b.name}`, secondary: b.desc })),
-          { id: 'keys', primary: 'keys', secondary: 'enter send · ctrl-c stop/quit · ctrl-d quit · pgup/pgdn scroll · esc back · tab complete' },
+          { id: 'keys', primary: 'keys', secondary: 'enter send · wheel or pgup/pgdn scroll · shift+↑↓ fine scroll · ctrl+home/end top/bottom · ctrl-d quit · esc back' },
         ]
         this.rowsHint = 'enter inserts into composer · esc back'
         return
@@ -918,31 +1001,123 @@ export class Engine {
     }
   }
 
+  /** Registry workspace record shape the facade may expose (all fields optional-tolerant). */
+  private workspaceRegistry(): { workspaces: { id: string; path: string; title: string; sessionIds: string[] }[]; archivedSessionIds: string[] } | undefined {
+    const dsh = this.dsh as unknown as {
+      listWorkspaces?: () => { workspaces?: { id?: unknown; path?: unknown; title?: unknown; sessionIds?: unknown; createdAt?: unknown; updatedAt?: unknown }[]; archivedSessionIds?: unknown } | undefined
+    }
+    if (typeof dsh.listWorkspaces !== 'function') return undefined
+    let raw: { workspaces?: { id?: unknown; path?: unknown; title?: unknown; sessionIds?: unknown }[]; archivedSessionIds?: unknown } | undefined
+    try {
+      raw = dsh.listWorkspaces()
+    } catch {
+      return undefined
+    }
+    if (raw === undefined || !Array.isArray(raw.workspaces)) return undefined
+    const workspaces: { id: string; path: string; title: string; sessionIds: string[] }[] = []
+    for (const w of raw.workspaces) {
+      if (typeof w !== 'object' || w === null) continue
+      const id = typeof w.id === 'string' && w.id !== '' ? w.id : undefined
+      if (id === undefined) continue
+      const path = typeof w.path === 'string' ? w.path : ''
+      const title = typeof w.title === 'string' && w.title !== ''
+        ? w.title
+        : path === '' ? id : path.slice(path.lastIndexOf('/') + 1) || path
+      const sessionIds = Array.isArray(w.sessionIds) ? w.sessionIds.filter((s): s is string => typeof s === 'string') : []
+      workspaces.push({ id, path, title, sessionIds })
+    }
+    const archived = Array.isArray(raw.archivedSessionIds)
+      ? raw.archivedSessionIds.filter((s): s is string => typeof s === 'string')
+      : []
+    return { workspaces, archivedSessionIds: archived }
+  }
+
+  private workspaceForSession(sessionId: string): string | undefined {
+    const dsh = this.dsh as unknown as { findWorkspaceForSession?: (id: string) => { id?: unknown } | undefined }
+    if (typeof dsh.findWorkspaceForSession === 'function') {
+      try {
+        const found = dsh.findWorkspaceForSession(sessionId)
+        if (found !== undefined && typeof found.id === 'string' && found.id !== '') return found.id
+      } catch {
+        // Fall through to registry scan.
+      }
+    }
+    return undefined
+  }
+
   /** Live-preferred session corpus, newest first (sessionQuery, else manual merge). */
   private async sessionRecords(): Promise<SessionListRecord[]> {
-    const fromQuery = await this.dsh.listSessionRecords()
-    if (fromQuery !== undefined) {
-      return [...fromQuery].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    // Flush the active session so persistence & query have the latest events & title.
+    if (this.agent !== undefined) {
+      await this.dsh.flush(this.agent.session).catch(() => false)
     }
-    const live = this.dsh.listLiveSessions().map(session => ({
-      id: session.id,
-      createdAt: session.header?.createdAt,
-      cwd: session.header?.cwd,
-      live: true,
-    }))
-    const persisted = (await this.dsh.listPersistedSessions()).map(header => ({
+    const fromQuery = await this.dsh.listSessionRecords()
+    const liveSessions = this.dsh.listLiveSessions()
+    const currentAgent = this.agent
+
+    const base = fromQuery ?? (await this.dsh.listPersistedSessions()).map(header => ({
       id: header.id,
       createdAt: header.createdAt,
       cwd: header.cwd,
       live: false,
     }))
-    const byId = new Map<string, SessionListRecord>()
-    for (const record of [...persisted, ...live]) byId.set(record.id, record)
-    return [...byId.values()].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+
+    const recordsById = new Map<string, SessionListRecord>()
+    for (const r of base) recordsById.set(r.id, { ...r })
+
+    // Merge live sessions from ctx.sessions
+    for (const s of liveSessions) {
+      const existing = recordsById.get(s.id)
+      recordsById.set(s.id, {
+        id: s.id,
+        createdAt: s.header?.createdAt ?? existing?.createdAt,
+        cwd: s.header?.cwd ?? existing?.cwd,
+        live: true,
+      })
+    }
+
+    // ALWAYS ensure the current active agent session is present and marked live!
+    if (currentAgent !== undefined) {
+      const existing = recordsById.get(currentAgent.id)
+      recordsById.set(currentAgent.id, {
+        id: currentAgent.id,
+        createdAt: currentAgent.session.header?.createdAt ?? existing?.createdAt ?? Date.now(),
+        cwd: currentAgent.session.header?.cwd ?? existing?.cwd,
+        live: true,
+      })
+    }
+
+    const currentId = currentAgent?.id
+    // Sort order:
+    // 1. Current active session ([this]) ALWAYS at row #0!
+    // 2. Other live sessions next
+    // 3. Newest createdAt next
+    return [...recordsById.values()].sort((a, b) => {
+      if (currentId !== undefined) {
+        if (a.id === currentId) return -1
+        if (b.id === currentId) return 1
+      }
+      if (a.live !== b.live) return a.live ? -1 : 1
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0)
+    })
+  }
+
+  private sessionOrigin(record: SessionListRecord): string | undefined {
+    const withOrigin = record as SessionListRecord & { origin?: unknown }
+    return typeof withOrigin.origin === 'string' ? withOrigin.origin : undefined
   }
 
   /** Best-known name for one session: live log fold, else the cached read. */
   private sessionTitle(record: SessionListRecord): string | undefined {
+    // If it's the current active session, read directly from live in-memory events!
+    if (this.agent !== undefined && record.id === this.agent.id) {
+      const events = readSessionEvents(this.agent.session)
+      const title = this.dsh.foldTitle(events) ?? this.dsh.firstPrompt(events)
+      if (title !== undefined) {
+        this.titleCache.set(record.id, title)
+        return title
+      }
+    }
     if (record.live) {
       const session = this.dsh.listLiveSessions().find(s => s.id === record.id)
       if (session !== undefined) {
@@ -957,34 +1132,147 @@ export class Engine {
   }
 
   /**
-   * Name-first row, web-parity labeling: durable title, else the project
-   * basename (what the web shows for untitled sessions), with the short id,
-   * age, and project as the detail line.
+   * Filter records for the browser: drop archived sessions and subagent
+   * transcripts. SessionListRecord currently lacks `origin`, so read it
+   * defensively — the facade may add it later.
+   */
+  private visibleSessionRecords(records: SessionListRecord[], archived: ReadonlySet<string>): SessionListRecord[] {
+    return records.filter(r => !archived.has(r.id) && this.sessionOrigin(r) !== 'subagent')
+  }
+
+  /**
+   * Name-first child row: primary title (or 'New Session' fallback), short
+   * id only as the secondary, current/live badge. No age, cwd, or full id.
    */
   private sessionRow(record: SessionListRecord): Row {
-    const title = this.sessionTitle(record)
-    const dir = record.cwd === undefined ? '' : record.cwd.slice(record.cwd.lastIndexOf('/') + 1)
-    const project = dir === '' ? `${shortSession(record.id)} (untitled)` : dir
+    const title = this.sessionTitle(record) ?? 'New Session'
     return {
       id: record.id,
-      primary: title ?? project,
-      secondary: `${shortSession(record.id)} · ${age(record.createdAt)}${record.live ? ' · live' : ''}${title === undefined ? '' : ` · ${dir}`}`,
+      primary: title,
+      secondary: shortSession(record.id),
       badge: record.id === this.agent?.id ? 'this' : record.live ? 'live' : undefined,
     }
   }
 
-  private buildSessionRows(records: SessionListRecord[]): Row[] {
-    return records.map(record => this.sessionRow(record))
+  /** Group visible records into project rows in durable registry order. */
+  private sessionProjectRows(records: SessionListRecord[]): { rows: Row[]; order: string[]; byKey: Map<string, SessionListRecord[]> } {
+    const registry = this.workspaceRegistry()
+    const archived = new Set(registry?.archivedSessionIds ?? [])
+    const visible = this.visibleSessionRecords(records, archived)
+    const byId = new Map(visible.map(r => [r.id, r]))
+    const assigned = new Set<string>()
+    const rows: Row[] = []
+    const order: string[] = []
+    const byKey = new Map<string, SessionListRecord[]>()
+    const currentId = this.agent?.id
+    const currentWorkspaceId = currentId === undefined ? undefined : this.workspaceForSession(currentId)
+
+    const pushProject = (key: string, title: string, ordered: SessionListRecord[]): void => {
+      const children = ordered.filter(r => byId.has(r.id))
+      for (const r of children) assigned.add(r.id)
+      // Always show registry workspaces, even when all children filter out.
+      byKey.set(key, children)
+      order.push(key)
+      const current = key === currentWorkspaceId || children.some(r => r.id === currentId)
+      rows.push({
+        id: `workspace:${key}`,
+        primary: title,
+        secondary: children.length === 1 ? '1 chat' : `${String(children.length)} chats`,
+        badge: current ? 'current' : undefined,
+      })
+    }
+
+    if (registry !== undefined) {
+      // Durable registry order is authoritative; never re-sort by recency.
+      for (const w of registry.workspaces) {
+        const ordered = w.sessionIds
+          .map(id => byId.get(id))
+          .filter((r): r is SessionListRecord => r !== undefined)
+        // Registry members discovered through findWorkspaceForSession but
+        // missing from sessionIds still belong to the project.
+        for (const r of visible) {
+          if (assigned.has(r.id) || ordered.includes(r)) continue
+          if (this.workspaceForSession(r.id) === w.id) ordered.push(r)
+        }
+        pushProject(w.id, w.title, ordered)
+      }
+    } else {
+      // Fallback: group by cwd, first-seen order (stable, durable enough).
+      const groups = new Map<string, SessionListRecord[]>()
+      for (const r of visible) groups.set(r.cwd ?? '', [...(groups.get(r.cwd ?? '') ?? []), r])
+      for (const [cwd, children] of groups) {
+        const title = cwd === '' ? 'Ungrouped' : cwd.slice(cwd.lastIndexOf('/') + 1) || cwd
+        pushProject(`cwd:${cwd}`, title, children)
+      }
+    }
+
+    const leftovers = visible.filter(r => !assigned.has(r.id))
+    if (leftovers.length > 0) {
+      // Only unattached records land here; registry/cwd grouping claimed the rest.
+      const key = 'ungrouped'
+      byKey.set(key, leftovers)
+      order.push(key)
+      const current = leftovers.some(r => r.id === currentId)
+      rows.push({
+        id: `workspace:${key}`,
+        primary: 'Ungrouped',
+        secondary: leftovers.length === 1 ? '1 chat' : `${String(leftovers.length)} chats`,
+        badge: current ? 'current' : undefined,
+      })
+    }
+
+    return { rows, order, byKey }
+  }
+
+  /** Load the sessions browser: root project rows or one workspace's chats. */
+  private async loadSessionsView(workspace?: string): Promise<void> {
+    const records = await this.sessionRecords()
+    this.sessionRecordsCache = records
+    if (workspace === undefined) {
+      const { rows, order, byKey } = this.sessionProjectRows(records)
+      this.sessionWorkspaces = order.map(key => {
+        const row = rows.find(r => r.id === `workspace:${key}`)
+        return {
+          key,
+          title: row?.primary ?? key,
+          count: byKey.get(key)?.length ?? 0,
+          current: row?.badge === 'current',
+        }
+      })
+      this.rows = rows.slice(0, 60)
+      this.rowsHint = `${String(records.length)} sessions · enter opens · esc back`
+      void this.fillSessionTitles(records)
+      return
+    }
+    const grouped = this.sessionProjectRows(records)
+    const children = grouped.byKey.get(workspace) ?? []
+    this.sessionWorkspaces = []
+    this.rows = children.map(r => this.sessionRow(r)).slice(0, 60)
+    this.rowsHint = `${String(children.length)} chats · enter resumes · esc back`
+    void this.fillSessionTitles(records)
+  }
+
+  /** Re-render child rows after async titles land, without touching root rows. */
+  private refreshSessionChildRows(records: SessionListRecord[], selected: string | undefined): void {
+    const view = this.view
+    if (view.name !== 'sessions' || view.workspace === undefined) return
+    const grouped = this.sessionProjectRows(records)
+    const children = grouped.byKey.get(view.workspace) ?? []
+    this.rows = children.map(r => this.sessionRow(r)).slice(0, 60)
+    const next = selected === undefined ? -1 : this.rows.findIndex(r => r.id === selected)
+    this.rowIndex = next >= 0 ? next : 0
   }
 
   /**
    * Read persisted-session names in one batched background call (cached
    * across opens, '' = known untitled); rows update once when it lands.
-   * Selection follows the session id, never a row index.
+   * Selection follows the session id, never a row index. Root project rows
+   * are never rewritten by title fills — only child rows re-render.
    */
   private async fillSessionTitles(records: SessionListRecord[]): Promise<void> {
     const viewKey = JSON.stringify(this.view)
-    const pending = records.filter(r => !r.live && !this.titleCache.has(r.id)).slice(0, 60).map(r => r.id)
+    const visible = this.visibleSessionRecords(records, new Set(this.workspaceRegistry()?.archivedSessionIds ?? []))
+    const pending = visible.filter(r => !r.live && !this.titleCache.has(r.id)).slice(0, 60).map(r => r.id)
     if (pending.length === 0) return
     let titles: Map<string, string>
     try {
@@ -996,10 +1284,27 @@ export class Engine {
     for (const id of pending) if (!this.titleCache.has(id)) this.titleCache.set(id, '')
     if (JSON.stringify(this.view) !== viewKey || this.quitting) return
     const selected = this.rows[this.rowIndex]?.id
-    this.rows = this.buildSessionRows(records).slice(0, 60)
-    const next = this.rows.findIndex(r => r.id === selected)
-    this.rowIndex = next >= 0 ? next : 0
+    // Root rows are project aggregates: counts/titles never depend on chat titles.
+    if (this.view.name === 'sessions' && this.view.workspace === undefined) return
+    this.refreshSessionChildRows(records, selected)
     this.emit()
+  }
+
+  /** Human project title for the active sessions child view. */
+  sessionWorkspaceTitle(): string | undefined {
+    if (this.view.name !== 'sessions' || this.view.workspace === undefined) return undefined
+    const key = this.view.workspace
+    const cached = this.sessionWorkspaces.find(workspace => workspace.key === key)?.title
+    if (cached !== undefined) return cached
+    const registry = this.workspaceRegistry()
+    const durable = registry?.workspaces.find(workspace => workspace.id === key)?.title
+    if (durable !== undefined) return durable
+    if (key === 'ungrouped') return 'Ungrouped'
+    if (key.startsWith('cwd:')) {
+      const cwd = key.slice('cwd:'.length)
+      return cwd === '' ? 'Ungrouped' : cwd.slice(cwd.lastIndexOf('/') + 1) || cwd
+    }
+    return key
   }
 
   /** Activate the selected panel row. */
@@ -1010,6 +1315,11 @@ export class Engine {
     const view = this.view
     switch (view.name) {
       case 'sessions': {
+        // Root project rows drill in; child session rows resume.
+        if (row.id.startsWith('workspace:')) {
+          this.openView({ name: 'sessions', workspace: row.id.slice('workspace:'.length) })
+          return
+        }
         void (async () => {
           agent?.cancel('user')
           if (agent !== undefined) await agent.whenIdle()
@@ -1057,15 +1367,21 @@ export class Engine {
         return
       }
       case 'presets': {
+        this.view = { name: 'chat' }
+        this.emit()
         void (async () => {
-          agent?.cancel('user')
-          if (agent !== undefined) await agent.whenIdle()
-          this.running = false
-          this.preset = row.id
-          this.cleared = false
-          await this.reopen({ resume: '', model: '', provider: '', print: '' })
-          this.view = { name: 'chat' }
-          this.toast(`session composed with preset "${row.id}"`, 'ok')
+          try {
+            agent?.cancel('user')
+            if (agent !== undefined) await agent.whenIdle()
+            this.running = false
+            this.preset = row.id
+            this.cleared = false
+            await this.reopen({ resume: '', model: '', provider: '', print: '' })
+            const text = presetDisplayText({ id: row.id })
+            this.toast(`session composed with preset "${text.name}"`, 'ok')
+          } catch (error) {
+            this.toast(`preset switch failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+          }
         })()
         return
       }
@@ -1254,8 +1570,33 @@ export class Engine {
       return
     }
 
-    // Chat view. History scrolls through the terminal's native scrollback
-    // (the transcript renders through Ink's static region).
+    // Chat view. Fixed-frame transcript offset: PgUp/PgDn move ~10 rows,
+    // Ctrl+Home jumps to the top, Ctrl+End follows the bottom. Plain
+    // Home/End stay with the composer field (cursor semantics preserved).
+    if (key.pageUp === true) {
+      this.scrollTranscript(10)
+      return
+    }
+    if (key.pageDown === true) {
+      this.scrollTranscript(-10)
+      return
+    }
+    if (key.shift === true && key.upArrow === true) {
+      this.scrollTranscript(3)
+      return
+    }
+    if (key.shift === true && key.downArrow === true) {
+      this.scrollTranscript(-3)
+      return
+    }
+    if (key.ctrl === true && key.home === true) {
+      this.setTranscriptScroll(Number.MAX_SAFE_INTEGER)
+      return
+    }
+    if (key.ctrl === true && key.end === true) {
+      this.setTranscriptScroll(0)
+      return
+    }
     if (key.f1 === true) {
       this.openView({ name: 'help' })
       return
@@ -1281,6 +1622,7 @@ export class Engine {
     }
     if (key.ctrl === true && input === 'l') {
       this.cleared = true
+      this.setTranscriptScroll(0)
       this.emit()
       return
     }
@@ -1346,6 +1688,7 @@ export class Engine {
     if (key.escape === true) {
       if (this.view.name === 'settings' && this.view.ns !== undefined) this.openView({ name: 'settings' })
       else if (this.view.name === 'model' && this.view.provider !== undefined) this.openView({ name: 'model' })
+      else if (this.view.name === 'sessions' && this.view.workspace !== undefined) this.openView({ name: 'sessions' })
       else this.view = { name: 'chat' }
       this.emit()
       return

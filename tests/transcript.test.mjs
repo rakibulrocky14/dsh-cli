@@ -18,6 +18,7 @@ const dshMod = await import('../lib/core/dsh.js')
 const engine = await import('../lib/tui/engine.js')
 
 const { projectEvents, LiveFeed, summarizeInterval, parseInline, splitFences, foldTodos, foldUsage } = transcript
+const { parseMarkdown } = await import('../lib/core/markdown.js')
 const { createUserMessage } = messages
 const { parseModelSelection, parseAssignments, normalizeEffort, shortHome, BUILTINS, EFFORT_LEVELS } = commands
 const { forkBoundary } = dshMod
@@ -125,6 +126,64 @@ describe('inline markup', () => {
     assert.equal(sections.length, 3)
     assert.equal(sections[1].code, true)
     assert.equal(sections[1].lang, 'js')
+  })
+})
+
+describe('markdown blocks', () => {
+  it('parses headings, tables, lists, and quotes', () => {
+    const blocks = parseMarkdown([
+      '## The file map',
+      '',
+      '| File | Role |',
+      '|---|---|',
+      '| `src/core/dsh.ts` | **workhorse** |',
+      '| `src/tui/app.tsx` | renderer |',
+      '',
+      '- **Zero imports.** Cordis only.',
+      '- second item',
+      '',
+      '> quoted line',
+      '',
+      '1. first',
+      '2. second',
+    ].join('\n'))
+    assert.equal(blocks[0].kind, 'heading')
+    assert.equal(blocks[0].text, 'The file map')
+    assert.equal(blocks[1].kind, 'table')
+    assert.deepEqual(blocks[1].headers, ['File', 'Role'])
+    assert.equal(blocks[1].rows.length, 2)
+    assert.equal(blocks[2].kind, 'list')
+    assert.equal(blocks[2].ordered, false)
+    assert.equal(blocks[2].items[0], '**Zero imports.** Cordis only.')
+    assert.equal(blocks[3].kind, 'quote')
+    assert.equal(blocks[4].kind, 'list')
+    assert.equal(blocks[4].ordered, true)
+  })
+
+  it('safely handles incomplete streaming tables without hanging in an infinite loop', () => {
+    // Single header line without separator (e.g. streaming mid-turn)
+    const stream1 = parseMarkdown("Sure! Here's\n| col1 | col2 |")
+    assert.equal(stream1.length, 1)
+    assert.equal(stream1[0].kind, 'para')
+
+    // Header and separator line arrived, no data rows yet
+    const stream2 = parseMarkdown("Sure! Here's\n\n| col1 | col2 |\n|---|---|")
+    assert.equal(stream2.length, 2)
+    assert.equal(stream2[0].kind, 'para')
+    assert.equal(stream2[1].kind, 'table')
+    assert.deepEqual(stream2[1].headers, ['col1', 'col2'])
+    assert.equal(stream2[1].rows.length, 0)
+
+    // Header, separator, and data rows arrived
+    const stream3 = parseMarkdown("Sure! Here's\n\n| col1 | col2 |\n|---|---|\n| val1 | val2 |")
+    assert.equal(stream3.length, 2)
+    assert.equal(stream3[1].kind, 'table')
+    assert.deepEqual(stream3[1].rows, [['val1', 'val2']])
+
+    // Standalone pipe line in text
+    const textWithPipes = parseMarkdown("command | grep foo | sort")
+    assert.equal(textWithPipes.length, 1)
+    assert.equal(textWithPipes[0].kind, 'para')
   })
 })
 

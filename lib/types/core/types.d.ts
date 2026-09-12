@@ -218,6 +218,7 @@ export interface AgentPresetInfo {
     readonly id: string;
     readonly name?: string;
     readonly description?: string;
+    readonly trust?: 'system' | 'user';
     readonly broken?: string;
 }
 /** One background-job snapshot (subset). */

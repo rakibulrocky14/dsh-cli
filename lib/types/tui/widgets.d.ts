@@ -9,8 +9,8 @@ import { type Block } from '../core/transcript.js';
 import { type Field, type Modal, type Row, type Toast } from './engine.js';
 /** Semantic palette (chalk honors NO_COLOR automatically). */
 export declare const theme: {
-    readonly accent: "cyan";
-    readonly user: "cyan";
+    readonly accent: "#4d6bfe";
+    readonly user: "#4d6bfe";
     readonly thinking: "gray";
     readonly code: "gray";
     readonly success: "green";
@@ -18,7 +18,7 @@ export declare const theme: {
     readonly error: "red";
     readonly muted: "gray";
     readonly border: "gray";
-    readonly selection: "cyan";
+    readonly selection: "#4d6bfe";
     readonly glyph: "magenta";
 };
 /**
@@ -56,15 +56,20 @@ export interface ParsedToolArgs {
  * `k: v` pairs, and path+content args light up the Claude-style file card.
  */
 export declare function parseToolArgs(argsText: string, max?: number): ParsedToolArgs;
-/** Markdown-ish text: fenced code dimmed, inline bold/code spans. */
-export declare function RichText({ text, dimmed }: {
-    text: string;
-    dimmed?: boolean;
-}): React.JSX.Element;
 /** Inline spans (bold/code) for short single-paragraph text. */
 export declare function InlineText({ text, dimmed }: {
     text: string;
     dimmed?: boolean;
+}): React.JSX.Element;
+/**
+ * Markdown-aware assistant text: headings, tables, lists, quotes, fences,
+ * and inline bold/code — the same family of chrome other TUIs show instead
+ * of dumping raw `|` / `##` source.
+ */
+export declare function RichText({ text, dimmed, width }: {
+    text: string;
+    dimmed?: boolean;
+    width?: number;
 }): React.JSX.Element;
 /**
  * One transcript block, Claude-Code-styled: user input on a full-width bar,
@@ -169,11 +174,10 @@ export declare function FieldView({ label, field, focused, placeholder }: {
     placeholder?: string;
 }): React.JSX.Element;
 /**
- * Main chat composer: a rounded box with a prompt glyph inside, matching
- * the Claude-Code input chrome. While a turn runs the border warms and the
- * glyph becomes a spinner so steering stays visually distinct from send.
+ * Main chat composer: two-row card with prompt on top and model badge + key hints below.
+ * While a turn runs the border warms and the glyph becomes a spinner.
  */
-export declare function Composer({ field, focused, running, spinnerFrame, runSeconds, width, placeholder }: {
+export declare function Composer({ field, focused, running, spinnerFrame, runSeconds, width, placeholder, model, effort, }: {
     field: Field;
     focused?: boolean;
     running?: boolean;
@@ -181,6 +185,8 @@ export declare function Composer({ field, focused, running, spinnerFrame, runSec
     runSeconds?: number;
     width?: number;
     placeholder?: string;
+    model?: string;
+    effort?: string;
 }): React.JSX.Element;
 /** Slash-command palette above the composer. */
 export declare function Palette({ entries, index, width }: {

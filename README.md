@@ -1,138 +1,186 @@
-# dsh-terminal
+# ⚡ dsh-cli (dsh-terminal)
 
-Vanilla DeepSeek Harness in the terminal — a Web-GUI-parity Cordis surface over `dsh-base`.
+> **Vanilla DeepSeek Harness in the terminal** — A Web-GUI-parity Cordis surface over `dsh-base`. Your agents, presets, tools, sessions, approval, settings, and plugins directly in your terminal. Nothing extra, nothing less.
 
-**Nothing extra, nothing less.** Same agents, tools, sessions, approval, settings, and installed plugins as `dsh web`. Web-only UI contributions are ignored; backend contributions always work.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js Version](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](https://nodejs.org)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek-Harness%20Plugin-0066FF.svg)](https://github.com/deepseek-ai)
 
-Three modes, chosen at boot:
+---
 
-| Mode | When | What |
-|------|------|------|
-| Full-screen TUI | stdio on a TTY | transcript + composer + panels + modal dialogs (Ink) |
-| Line REPL | pipes, CI, `--line` | same DSH bindings, line-oriented, history, Ctrl-C cancels the turn |
-| One-shot | `--print "<task>"` | answer one task, print the final text, exit with a status code |
+## 📸 Screenshots
 
-## Install
+### 🚀 Initial Start Screen & DeepSeek Blue TUI
+![dsh-terminal Initial Screen](docs/assets/dsh-terminal-preview.png)
 
-Requires Node `^22.19 || >=24` and the `dsh` CLI.
+### 🎛️ Interactive Agent Presets (`/presets`)
+![dsh-terminal Agent Presets](docs/assets/dsh-presets-preview.png)
 
-From this checkout:
+---
 
-```sh
-# once: install and build
+## ✨ Features
+
+- 🎨 **DeepSeek Blue Theme & Modern TUI**: Clean rounded composer, branded ASCII whale banner, dynamic status bar, and automatic full-terminal width adaptation.
+- 🎛️ **Full Agent Presets Parity**: Switch dynamically between **Standard mode**, **PTC mode** (Code Mode), **Minimal mode**, and **Creator mode** using `/presets`.
+- ⚡ **Web-GUI Parity**: Live stream rendering, reasoning effort indicators, tool call cards, session picker, model switchers, and interactive approval modals.
+- 🔌 **Seamless Cordis Plugin Support**: Any plugin in your DSH environment automatically works in the terminal.
+- 🖱️ **Full Terminal Navigation**: Smooth mouse wheel scrolling, PageUp/PageDown, Tab auto-completion for slash commands, and hotkeys.
+- 🧩 **Three Modes at Boot**:
+  - **Full-screen TUI**: Default on interactive TTY.
+  - **Line REPL**: For pipes, headless environments, CI, or `--line`.
+  - **One-shot CLI**: Run a single task via `--print "<task>"` and output the response.
+
+---
+
+## 📦 Installation & Setup
+
+### Prerequisites
+
+- Node.js `^22.19 || >=24`
+- [DeepSeek Harness (`dsh`) CLI](https://github.com/deepseek-ai) installed on your system.
+
+### Option 1: Install Directly via DSH CLI (Recommended)
+
+Add this plugin directly to your DSH configuration using `dsh plugin add`:
+
+```bash
+# Add to a dedicated 'terminal' profile
+dsh plugin --profile terminal add github:rakibulrocky14/dsh-cli
+```
+
+### Option 2: Clone and Install Locally
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/rakibulrocky14/dsh-cli.git
+cd dsh-cli
+
+# 2. Install dependencies & build
 npm install
-npm run build -w dsh-terminal
+npm run build
 
-# create a profile that stacks dsh-base + this surface
-dsh plugin --profile terminal add ./packages/dsh-terminal
+# 3. Add to DSH profile as a local plugin
+dsh plugin --profile terminal add .
+```
 
-# run (full-screen on a TTY)
+---
+
+## 🚀 Usage
+
+### Starting the Terminal TUI
+
+Launch the full-screen terminal interface:
+
+```bash
 dsh --profile terminal
 ```
 
-Flags (same idea as headless/web):
+### Command-Line Flags
 
-```sh
-dsh --profile terminal --help
+```bash
+# Run with a specific model
 dsh --profile terminal --model deepseek-reasoner
-dsh --profile terminal --resume session-…
-dsh --profile terminal --line              # force the line REPL
-dsh --profile terminal --print "run tests"  # one-shot, stdout + exit code
+
+# Resume an existing session
+dsh --profile terminal --resume session-c302f9d0
+
+# Force standard line REPL (non-TUI)
+dsh --profile terminal --line
+
+# One-shot execution (executes task, prints result, and exits)
+dsh --profile terminal --print "Explain how to set up a git repository"
 ```
 
-Add more plugins into the same profile (they load as ordinary DSH Cordis plugins):
+### Adding More Plugins
 
-```sh
+Stack additional DSH plugins into your terminal profile:
+
+```bash
 dsh plugin --profile terminal add <npm-pkg | github:owner/repo | ./path | ./pkg.tgz>
 ```
 
-## GUI → TUI parity
+---
 
-| Web GUI | Terminal |
-|---------|----------|
-| Chat + streaming | live text / reasoning / tool cards, scrollback history |
-| Sessions | `/sessions` browser (live + persisted), `/resume <id>`, `/new` |
-| Models | `/model` provider → model discovery picker, switch without forking, `--model` / `--provider` |
-| Effort | `/effort` per-model reasoning levels, resolved from the adapter |
-| Tools | `/tools` (from `dsh-base` + plugins), `ask_user_question` included |
-| Approval | allow / reject modal on `ctx.approval` (incl. sandbox escalation) |
-| Agent questions | option-list + free-text form via `ctx.userQuestions` |
-| Plugin commands | dispatched from `/`, never sent to the model (`/commands`) |
-| Plugins | `/plugins` + `dsh plugin add` |
-| Settings | `/settings` → same `$DSH_HOME/settings.yaml` namespaces web edits |
-| Permissions | `/permissions` (same presets as core) |
-| Jobs | `/jobs` background-job snapshots |
-| Diagnostics | `/doctor` |
+## 🎛️ Agent Presets
 
-## Keys (full-screen)
+Open the interactive presets menu anytime with `/presets` or switch directly via `/presets <id>`:
 
-`enter` send · typing while running steers · `ctrl-c` stops the turn (clears / quits when idle) · `ctrl-d` quits · `/` commands with Tab completion · `↑↓` palette / history · native scrollback · `esc` back · `f1` help.
+| Preset | ID | Description |
+|--------|----|-------------|
+| **Standard mode** | `standard` | Full coding agent with file editing, shell execution, search, skills, planning, subagents, and workflows. |
+| **PTC mode** | `code` | All Standard mode capabilities with tools exposed via the Code Mode SDK for multi-step TypeScript execution. |
+| **Minimal mode** | `minimal` | Ultra-fast two-tool coding agent with persistent bash and `str_replace_editor`. |
+| **Creator mode** | `cordis` | Built for authoring and testing custom agent presets with live runtime inspection and plugin tools. |
 
-The layout lives inside a 100-column cap (narrow terminals use their full width) and re-converges after terminal resizes.
+---
 
-## Slash commands
+## ⌨️ Shortcuts & Navigation
 
-Builtins (same set in the TUI and the line REPL):
+| Key | Action |
+|-----|--------|
+| `Enter` | Send message / confirm selection |
+| `Esc` | Close active dialog / return to transcript |
+| `Tab` | Autocomplete slash commands |
+| `↑` / `↓` | Cycle command history or navigate menus |
+| `PageUp` / `PageDown` | Scroll transcript up / down |
+| `Mouse Wheel` | Smoothly scroll through history and code outputs |
+| `Ctrl + O` | Expand / collapse tool output cards |
+| `Ctrl + C` | Cancel current turn (or clear prompt when idle) |
+| `Ctrl + D` | Exit / quit session |
 
-`/help` `/new` `/sessions` `/resume` `/fork` `/model` `/effort` `/title` `/tools` `/commands` `/skills` `/agents` `/terminals` `/presets` `/plugins` `/settings` `/permissions` `/jobs` `/todos` `/usage` `/stop` `/doctor` `/clear` `/quit`
+---
 
-Plugin commands (e.g. `/compact` `/plan` `/goal` `/feedback` `/permission`) dispatch directly — type `/` to see everything installed.
+## 🛠️ Slash Commands
 
-The status line reads `model · effort · ~/cwd · ctx · MODE`, e.g.
-`deepseek-official/deepseek-chat · high · ~/proj · 8.2k · 13% · [WRITE]` (the ctx
-segment shows `8.2k tok` until the model's context window resolves).
+Type `/` followed by `Tab` to see all available commands:
 
-## Plugin consumption (UI vs backend)
+- **Sessions**: `/sessions` (interactive session browser), `/resume <id>`, `/new`, `/fork`
+- **Configuration**: `/presets` (agent modes), `/model` (provider & model picker), `/effort` (reasoning effort levels), `/settings`, `/permissions`
+- **Inspection**: `/tools` (active tool definitions), `/commands` (all registered slash commands), `/skills`, `/agents`, `/plugins`, `/jobs`, `/usage`, `/doctor`
+- **Workspace**: `/terminals`, `/todos`, `/title`, `/clear`, `/stop`, `/quit`
 
-Backend always. UI only when portable.
+---
 
-| Contribution | Terminal |
-|--------------|----------|
-| `ctx.tools`, `ctx.commands`, `ctx.jobs`, `ctx.llm`, fs/sandbox/shell | **works** |
-| Settings keys, system prompt, session titles, hooks | **works** |
-| Web Client Chat node (`ConversationNodeDefinition` + renderer) | ignored |
-| Web settings card | card ignored; config key still editable when known |
-
-There is **no TUI-only plugin API**. Install into the DSH profile; the surface is a window onto DSH.
-
-Composition notes:
-
-- The terminal profile is **rosterless** (like headless): model-facing rows sit in the global layer and the surface composes one agent process-wide. Web composes each session from an agent preset instead. Resuming a preset-composed web session here runs the base tool set; the surface says so instead of failing.
-- The bundle adds the `ask_user_question` tool row (a preset row on web) so the agent can ask from the terminal. It is answered by this surface's `userQuestions` provider.
-- The surface targets the installed dsh release and tolerates its neighbors: live streaming listens to both `agent/assistant-stream` (newer) and top-level `assistant/chunk` events (older), first source wins; history reads prefer the `events` snapshot with an indexed fallback.
-
-## Architecture
+## 🏗️ Architecture
 
 ```
 dsh --profile terminal
   └── dsh-terminal (Cordis bundle)
-        ├── cordis.patch.yml      base rows + code-runtime + ask-user + startup + runner
-        ├── dsh-terminal/startup  cmdline flags → terminalStartup
+        ├── cordis.patch.yml      base rows + code-runtime + cordis-host + ask-user + startup + runner
+        ├── dsh-terminal/startup  command-line flags → terminalStartup
         └── dsh-terminal          runner → TUI | REPL | --print
-              ├── core/dsh.ts         UI-agnostic service facade (feature-detected)
-              ├── core/transcript.ts  durable-log projection + live overlay (shared)
-              ├── core/messages.ts    deep-frozen message factories (no llm import)
-              ├── core/lineinput.ts   single-reader TTY/pipe input (REPL)
-              ├── repl.ts             line surface
-              ├── print.ts            one-shot surface
-              └── tui/                engine (behavior) + app/widgets (Ink render)
+              ├── core/dsh.ts         service facade & runtime feature detection
+              ├── core/transcript.ts  durable-log projection & live streaming overlay
+              ├── core/messages.ts    deep-frozen message factories
+              ├── core/lineinput.ts   single-reader TTY/pipe input
+              ├── repl.ts             line REPL surface
+              ├── print.ts            one-shot execution surface
+              └── tui/                behavioral engine & Ink React widget tree
 ```
 
-Stacks on `@deepseek-ai/dsh-base` like `dsh-web-app`. Not a second host, not dsh-TUI's Channel protocol.
+---
 
-## Development
+## 🧪 Development & Testing
 
-```sh
-npm run typecheck -w dsh-terminal
-npm run build -w dsh-terminal
+```bash
+# Typecheck
+npm run typecheck
+
+# Build TypeScript to lib/
+npm run build
+
+# Run comprehensive test suite (61 tests)
+npm test
 ```
 
-Local `tsc` uses ambient types in `types/dsh-modules.d.ts` plus structural
-service shapes in `src/core/types.ts` (no `@deepseek-ai/*` runtime imports —
-everything arrives through the Cordis context). Runtime truth is the installed
-profile packages; `.ref/deepseek-harness` is a newer reference checkout, so
-verify API shapes against the installed release before relying on them.
+---
 
-## License
+## 🏷️ Discovery & Tags
 
-MIT
+`#deepseek` `#deepseek-harness` `#dsh` `#dsh-cli` `#dsh-terminal` `#terminal` `#tui` `#cli` `#ai-agent` `#llm` `#cordis` `#coding-assistant`
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © [rakibulrocky14](https://github.com/rakibulrocky14)

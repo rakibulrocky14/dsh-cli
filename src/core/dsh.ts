@@ -45,6 +45,7 @@ export interface StartupValues {
   model: string
   provider: string
   print: string
+  preset?: string
 }
 
 /** Async approval answer supplied by the active surface. */
@@ -245,6 +246,41 @@ export interface SessionListRecord {
   live: boolean
 }
 
+/**
+ * Workspace projection mirroring `ctx.workspaceRegistry`: plain data (never
+ * the live entity) in durable registry order, so the sessions browser can
+ * render without holding Cordis services. Absence of the registry service
+ * yields undefined, and the browser falls back to cwd grouping.
+ */
+export interface WorkspaceRecord {
+  id: string
+  path: string
+  title: string
+  sessionIds: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+/** Structural workspace entity (subset of dsh-workspace's Workspace). */
+interface WorkspaceEntityShape {
+  readonly id: string
+  readonly path: string
+  readonly title: string
+  readonly createdAt: string
+  readonly updatedAt: string
+  readonly sessionIds: readonly string[]
+  attachSession(sessionId: string): Promise<void>
+}
+
+/** Structural workspace registry (subset of dsh-workspace's WorkspaceRegistry). */
+interface WorkspaceRegistryShape {
+  list(): WorkspaceEntityShape[]
+  get(id: string): WorkspaceEntityShape | undefined
+  create(path: string, title?: string): Promise<WorkspaceEntityShape>
+  resolveByPath(path: string): Promise<WorkspaceEntityShape | undefined>
+  readonly archivedSessionIds: readonly string[]
+}
+
 /** Facade over the live DSH services reachable from one context. */
 export class Dsh {
   constructor(readonly ctx: DshContext) {}
@@ -273,20 +309,100 @@ export class Dsh {
     const selection = this.currentModel()
     const provider = startup.provider === '' ? selection.provider : startup.provider
     const model = startup.model === '' ? selection.model : startup.model
-    const setup = preset === undefined || preset === ''
+    const targetPreset = preset !== undefined && preset !== ''
+      ? preset
+      : startup.preset !== undefined && startup.preset !== ''
+        ? startup.preset
+        : this.defaultPresetId()
+    const setup = targetPreset === undefined || targetPreset === ''
       ? undefined
       : async (agentCtx: DshContext): Promise<void> => {
-        await this.mountPreset(agentCtx, preset)
+        await this.mountPreset(agentCtx, targetPreset)
+      }
+    if (startup.resume !== '') {
+      // Resumes rejoin an existing session: never reattach, so a resumed
+      // session keeps whatever workspace it already belongs to (or none).
+      return agents.resume({ resumeSessionId: startup.resume, agentOptions: { provider, model }, ...(setup === undefined ? {} : { setup }) })
+    }
+    const handle = await agents.create({
+      sessionId: `session-${randomUUID()}`,
+      meta: {
+        cwd: process.cwd(),
+        ...(targetPreset === undefined || targetPreset === '' ? {} : { agentPreset: targetPreset }),
+      },
+      agentOptions: { provider, model },
+      ...(setup === undefined ? {} : { setup }),
+    })
+    // Normal terminal new sessions belong to the cwd's workspace, like web's
+    // session.create. An attach failure must not break the new chat: the
+    // session was created fine, it is just ungrouped (the browser shows it
+    // under Ungrouped) until something attaches it later.
+    try {
+      await this.resolveWorkspaceForPath(process.cwd())
+        .then(async workspace => {
+          if (workspace !== undefined) await this.attachSessionToWorkspace(handle.agent.id, workspace.id)
+        })
+    } catch {
+      // Fresh session stands: unattached, visible, usable.
+    }
+    return handle
+  }
+
+  /**
+   * Create (or open) an agent for one explicit canonical cwd — the workspace
+   * flow for "open this directory": resolve-or-create the path's workspace,
+   * create the session there, and attach it. Attachment failure disposes the
+   * newly created handle (the session log itself is untouched — the user can
+   * still resume it) and rejects honestly.
+   * @param cwd - canonical directory owning the new session.
+   * @param startup - resolved CLI values (resume/model/provider).
+   * @param preset - preset id to compose, when the user applied one.
+   */
+  async openAgentInWorkspace(cwd: string, startup: StartupValues, preset?: string): Promise<DshAgentHandle> {
+    const agents = service<{
+      create(options: Record<string, unknown>): Promise<DshAgentHandle>
+      resume(options: Record<string, unknown>): Promise<DshAgentHandle>
+    }>(this.ctx, 'agents')
+    if (agents === undefined) throw new Error('terminal: ctx.agents is unavailable in this composition')
+    const selection = this.currentModel()
+    const provider = startup.provider === '' ? selection.provider : startup.provider
+    const model = startup.model === '' ? selection.model : startup.model
+    const targetPreset = preset !== undefined && preset !== ''
+      ? preset
+      : startup.preset !== undefined && startup.preset !== ''
+        ? startup.preset
+        : this.defaultPresetId()
+    const setup = targetPreset === undefined || targetPreset === ''
+      ? undefined
+      : async (agentCtx: DshContext): Promise<void> => {
+        await this.mountPreset(agentCtx, targetPreset)
       }
     if (startup.resume !== '') {
       return agents.resume({ resumeSessionId: startup.resume, agentOptions: { provider, model }, ...(setup === undefined ? {} : { setup }) })
     }
-    return agents.create({
+    const workspace = await this.resolveWorkspaceForPath(cwd)
+    if (workspace === undefined) {
+      throw new Error(`terminal: no workspace owns "${cwd}" and none could be created in this composition`)
+    }
+    const handle = await agents.create({
       sessionId: `session-${randomUUID()}`,
-      meta: { cwd: process.cwd() },
+      meta: {
+        cwd: workspace.path,
+        ...(targetPreset === undefined || targetPreset === '' ? {} : { agentPreset: targetPreset }),
+      },
       agentOptions: { provider, model },
       ...(setup === undefined ? {} : { setup }),
     })
+    try {
+      await this.attachSessionToWorkspace(handle.agent.id, workspace.id)
+    } catch (error) {
+      // Honest failure: release the fresh handle (the durable log survives
+      // and stays resumable) and report the attach miss, like web's
+      // workspace-attach-failed.
+      await handle.dispose().catch(() => {})
+      throw new Error(`terminal: session "${handle.agent.id}" was created but could not attach to workspace "${workspace.id}": ${error instanceof Error ? error.message : String(error)}`)
+    }
+    return handle
   }
 
   /** Current default provider/model selection. */
@@ -601,6 +717,16 @@ export class Dsh {
     return ''
   }
 
+  /** Default preset id configured in agentPresets, if present. */
+  defaultPresetId(): string | undefined {
+    const presets = service<Record<string, unknown>>(this.ctx, 'agentPresets')
+    if (presets === undefined) return undefined
+    if (typeof presets.defaultId === 'string' && presets.defaultId !== '') return presets.defaultId
+    const cfg = presets.config as { default?: unknown } | undefined
+    if (typeof cfg?.default === 'string' && cfg.default !== '') return cfg.default
+    return undefined
+  }
+
   /** Agent presets from every configured root. */
   async listPresets(): Promise<AgentPresetInfo[]> {
     const presets = service<Record<string, unknown>>(this.ctx, 'agentPresets')
@@ -752,12 +878,22 @@ export class Dsh {
       create(options: Record<string, unknown>): Promise<DshAgentHandle>
     }>(this.ctx, 'agents')
     if (agents === undefined) throw new Error('terminal: ctx.agents is unavailable in this composition')
-    return agents.create({
+    const handle = await agents.create({
       sessionId: `session-${randomUUID()}`,
       seed: events.filter(e => e.seq <= boundary),
       meta: { cwd: process.cwd(), parentSession: agent.id, seedLength: boundary + 1 },
       agentOptions: { ...agent.options },
     })
+    // Forks inherit the source's workspace, like web's forkWorkspace. The
+    // forked session is valid regardless — an attach miss leaves it
+    // ungrouped rather than failing the fork.
+    try {
+      const owner = this.findWorkspaceForSession(agent.id)
+      if (owner !== undefined) await this.attachSessionToWorkspace(handle.agent.id, owner.id)
+    } catch {
+      // Fork stands: unattached, visible, usable.
+    }
+    return handle
   }
 
   /** Rename one live session (pins the title; auto-generation stops). */
@@ -769,6 +905,103 @@ export class Dsh {
     const snapshot = (titles.rename as (session: DshSession, title: string) => { title?: unknown })
       .call(titles, session, title)
     return typeof snapshot?.title === 'string' && snapshot.title !== '' ? snapshot.title : title
+  }
+
+  /**
+   * The workspace registry, when the composition mounts it: feature-detected
+   * structurally so older profiles (no workspace row) degrade to undefined
+   * and the sessions browser falls back to cwd grouping.
+   */
+  private workspaces(): WorkspaceRegistryShape | undefined {
+    const registry = service<Record<string, unknown>>(this.ctx, 'workspaceRegistry')
+    if (registry === undefined || !hasMethod(registry, 'list')) return undefined
+    return registry as unknown as WorkspaceRegistryShape
+  }
+
+  /**
+   * Workspace listing for the sessions browser: plain records in durable
+   * registry order plus the archived set, or undefined when the registry is
+   * absent. Malformed rows are skipped, never thrown.
+   */
+  listWorkspaces(): { workspaces: WorkspaceRecord[]; archivedSessionIds: string[] } | undefined {
+    const registry = this.workspaces()
+    if (registry === undefined) return undefined
+    let rows: WorkspaceEntityShape[]
+    try {
+      rows = registry.list()
+    } catch {
+      return undefined
+    }
+    if (!Array.isArray(rows)) return undefined
+    const workspaces: WorkspaceRecord[] = []
+    for (const w of rows) {
+      if (typeof w !== 'object' || w === null) continue
+      if (typeof w.id !== 'string' || w.id === '') continue
+      workspaces.push({
+        id: w.id,
+        path: typeof w.path === 'string' ? w.path : '',
+        title: typeof w.title === 'string' && w.title !== '' ? w.title : w.id,
+        sessionIds: Array.isArray(w.sessionIds) ? (w.sessionIds as unknown[]).filter((s): s is string => typeof s === 'string') : [],
+        createdAt: typeof w.createdAt === 'string' ? w.createdAt : '',
+        updatedAt: typeof w.updatedAt === 'string' ? w.updatedAt : '',
+      })
+    }
+    const archived = Array.isArray(registry.archivedSessionIds)
+      ? (registry.archivedSessionIds as unknown[]).filter((s): s is string => typeof s === 'string')
+      : []
+    return { workspaces, archivedSessionIds: archived }
+  }
+
+  /**
+   * Resolve (or create) the workspace owning one directory: existing owner
+   * first, else a create through `fs.realpath` canonicalization. Returns
+   * undefined — never throws for registry absence — so ordinary session
+   * creation stays total.
+   * @param path - directory in any spelling; must exist.
+   */
+  async resolveWorkspaceForPath(path: string): Promise<WorkspaceRecord | undefined> {
+    const registry = this.workspaces()
+    if (registry === undefined) return undefined
+    try {
+      const existing = await registry.resolveByPath(path)
+      const workspace = existing ?? await registry.create(path)
+      return {
+        id: workspace.id,
+        path: workspace.path,
+        title: workspace.title,
+        sessionIds: [...workspace.sessionIds],
+        createdAt: workspace.createdAt,
+        updatedAt: workspace.updatedAt,
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Attach an existing session to a workspace by id. Throws honestly when the
+   * registry or workspace is absent (or the attach rejects) — callers decide
+   * whether that failure is fatal. Never deletes a session.
+   * @param sessionId - live or persisted session to record.
+   * @param workspaceId - owning workspace.
+   */
+  async attachSessionToWorkspace(sessionId: string, workspaceId: string): Promise<void> {
+    const registry = this.workspaces()
+    if (registry === undefined) throw new Error('terminal: no workspace registry in this composition')
+    const workspace = registry.get(workspaceId)
+    if (workspace === undefined) throw new Error(`terminal: workspace "${workspaceId}" not found`)
+    await workspace.attachSession(sessionId)
+  }
+
+  /**
+   * Find the workspace owning a session: the registry projection's `sessionIds`
+   * membership, probed synchronously so the browser can call it per row.
+   * Returns undefined when absent or unowned (older compositions, Ungrouped).
+   * @param sessionId - session whose owner to find.
+   */
+  findWorkspaceForSession(sessionId: string): WorkspaceRecord | undefined {
+    const listed = this.listWorkspaces()
+    return listed?.workspaces.find(w => w.sessionIds.includes(sessionId))
   }
 
   /**
@@ -844,3 +1077,45 @@ export class Dsh {
     }
   }
 }
+
+/**
+ * Canonical English copy for shipped presets, matching `@deepseek-ai/dsh-client-ui-agent-preset`.
+ * Raw disk metadata in DSH defaults to Chinese; this lookup aligns the terminal TUI with Web DSH.
+ */
+export const BUILT_IN_PRESET_COPY: Record<string, { name: string; description: string }> = {
+  standard: {
+    name: 'Standard mode',
+    description: 'Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.',
+  },
+  code: {
+    name: 'PTC mode',
+    description: 'All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.',
+  },
+  minimal: {
+    name: 'Minimal mode',
+    description: 'Two-tool coding agent with persistent bash and str_replace_editor.',
+  },
+  cordis: {
+    name: 'Creator mode',
+    description: 'Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance.',
+  },
+}
+
+/**
+ * Resolve display copy for an agent preset. Shipped / system presets use
+ * Web DSH's English copy; user-authored presets keep their authored metadata.
+ */
+export function presetDisplayText(preset: { id: string; name?: string; description?: string; trust?: 'system' | 'user' }): {
+  name: string
+  description?: string
+} {
+  const builtin = preset.trust === 'system' || preset.trust === undefined
+    ? BUILT_IN_PRESET_COPY[preset.id]
+    : undefined
+  if (builtin !== undefined) return builtin
+  return {
+    name: (preset.name ?? '') !== '' ? preset.name! : preset.id,
+    ...(preset.description !== undefined && preset.description !== '' ? { description: preset.description } : {}),
+  }
+}
+

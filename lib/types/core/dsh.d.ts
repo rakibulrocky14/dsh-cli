@@ -14,6 +14,7 @@ export interface StartupValues {
     model: string;
     provider: string;
     print: string;
+    preset?: string;
 }
 /** Async approval answer supplied by the active surface. */
 export type ApprovalAnswerer = (request: ApprovalRequest) => Promise<ApprovalOutcome>;
@@ -75,6 +76,20 @@ export interface SessionListRecord {
     cwd: string | undefined;
     live: boolean;
 }
+/**
+ * Workspace projection mirroring `ctx.workspaceRegistry`: plain data (never
+ * the live entity) in durable registry order, so the sessions browser can
+ * render without holding Cordis services. Absence of the registry service
+ * yields undefined, and the browser falls back to cwd grouping.
+ */
+export interface WorkspaceRecord {
+    id: string;
+    path: string;
+    title: string;
+    sessionIds: string[];
+    createdAt: string;
+    updatedAt: string;
+}
 /** Facade over the live DSH services reachable from one context. */
 export declare class Dsh {
     readonly ctx: DshContext;
@@ -87,6 +102,17 @@ export declare class Dsh {
      * @param preset - preset id to compose, when the user applied one.
      */
     openAgent(startup: StartupValues, preset?: string): Promise<DshAgentHandle>;
+    /**
+     * Create (or open) an agent for one explicit canonical cwd — the workspace
+     * flow for "open this directory": resolve-or-create the path's workspace,
+     * create the session there, and attach it. Attachment failure disposes the
+     * newly created handle (the session log itself is untouched — the user can
+     * still resume it) and rejects honestly.
+     * @param cwd - canonical directory owning the new session.
+     * @param startup - resolved CLI values (resume/model/provider).
+     * @param preset - preset id to compose, when the user applied one.
+     */
+    openAgentInWorkspace(cwd: string, startup: StartupValues, preset?: string): Promise<DshAgentHandle>;
     /** Current default provider/model selection. */
     currentModel(): ModelSelection;
     /** Persist the default selection (same keys the Web Models page writes). */
@@ -157,6 +183,8 @@ export declare class Dsh {
     }) => boolean): () => void;
     /** Find a tool/call's argument string in the log for approval cards. */
     findToolArgs(session: DshSession, callId: string | undefined): string;
+    /** Default preset id configured in agentPresets, if present. */
+    defaultPresetId(): string | undefined;
     /** Agent presets from every configured root. */
     listPresets(): Promise<AgentPresetInfo[]>;
     /** Compose one agent scope from a preset (call from factory setup). */
@@ -200,6 +228,44 @@ export declare class Dsh {
     /** Rename one live session (pins the title; auto-generation stops). */
     renameSession(session: DshSession, title: string): string;
     /**
+     * The workspace registry, when the composition mounts it: feature-detected
+     * structurally so older profiles (no workspace row) degrade to undefined
+     * and the sessions browser falls back to cwd grouping.
+     */
+    private workspaces;
+    /**
+     * Workspace listing for the sessions browser: plain records in durable
+     * registry order plus the archived set, or undefined when the registry is
+     * absent. Malformed rows are skipped, never thrown.
+     */
+    listWorkspaces(): {
+        workspaces: WorkspaceRecord[];
+        archivedSessionIds: string[];
+    } | undefined;
+    /**
+     * Resolve (or create) the workspace owning one directory: existing owner
+     * first, else a create through `fs.realpath` canonicalization. Returns
+     * undefined — never throws for registry absence — so ordinary session
+     * creation stays total.
+     * @param path - directory in any spelling; must exist.
+     */
+    resolveWorkspaceForPath(path: string): Promise<WorkspaceRecord | undefined>;
+    /**
+     * Attach an existing session to a workspace by id. Throws honestly when the
+     * registry or workspace is absent (or the attach rejects) — callers decide
+     * whether that failure is fatal. Never deletes a session.
+     * @param sessionId - live or persisted session to record.
+     * @param workspaceId - owning workspace.
+     */
+    attachSessionToWorkspace(sessionId: string, workspaceId: string): Promise<void>;
+    /**
+     * Find the workspace owning a session: the registry projection's `sessionIds`
+     * membership, probed synchronously so the browser can call it per row.
+     * Returns undefined when absent or unowned (older compositions, Ungrouped).
+     * @param sessionId - session whose owner to find.
+     */
+    findWorkspaceForSession(sessionId: string): WorkspaceRecord | undefined;
+    /**
      * Selectable efforts for one model: adapter-resolved, else the static
      * DeepSeek vocabulary fallback.
      */
@@ -227,3 +293,24 @@ export declare class Dsh {
         label: string;
     }[];
 }
+/**
+ * Canonical English copy for shipped presets, matching `@deepseek-ai/dsh-client-ui-agent-preset`.
+ * Raw disk metadata in DSH defaults to Chinese; this lookup aligns the terminal TUI with Web DSH.
+ */
+export declare const BUILT_IN_PRESET_COPY: Record<string, {
+    name: string;
+    description: string;
+}>;
+/**
+ * Resolve display copy for an agent preset. Shipped / system presets use
+ * Web DSH's English copy; user-authored presets keep their authored metadata.
+ */
+export declare function presetDisplayText(preset: {
+    id: string;
+    name?: string;
+    description?: string;
+    trust?: 'system' | 'user';
+}): {
+    name: string;
+    description?: string;
+};

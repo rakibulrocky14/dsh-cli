@@ -8,7 +8,7 @@
 
 import { join } from 'node:path'
 import { BUILTINS, normalizeEffort, parseAssignments, parseModelSelection, shortHome, shortSession } from './core/commands.js'
-import { Dsh, attachLiveStream, dshHome, dshProfile, installModelOverride, listProfilePlugins, sendFollowup, sendSteer, type StartupValues } from './core/dsh.js'
+import { Dsh, attachLiveStream, dshHome, dshProfile, installModelOverride, listProfilePlugins, presetDisplayText, sendFollowup, sendSteer, type StartupValues } from './core/dsh.js'
 import { CookedInput, LineEditor } from './core/lineinput.js'
 import { LiveFeed, foldTodos, foldUsage, isLiveBlock, renderBlockText, summarizeArgs, type Block } from './core/transcript.js'
 import { readSessionEvents, type ApprovalOutcome, type AskItem, type DshAgent, type DshAgentHandle, type DshContext, type ModelSelectionRef } from './core/types.js'
@@ -211,9 +211,9 @@ export class Repl {
       this.out(dim(`  — resumed with ${String(committed.length)} blocks, showing recent —\n`))
       this.printBlocks(committed.slice(-30))
     }
-    const preset = this.dsh.sessionPreset(agent.session)
-    if (preset !== undefined) {
-      this.out(yellow(`  note: this session runs preset "${preset}" on web; the terminal composes the base tool set instead\n`))
+    const sessionPreset = this.dsh.sessionPreset(agent.session)
+    if (sessionPreset !== undefined && sessionPreset !== '') {
+      this.preset = sessionPreset
     }
   }
 
@@ -395,7 +395,17 @@ export class Repl {
         await this.reopen({ ...startup, resume: '' })
         return 'continue'
       }
-      case 'sessions': {
+      case 'sessions':
+      case 'session': {
+        if (rest !== '') {
+          const id = await this.resolveSessionId(rest)
+          if (id === undefined) return 'continue'
+          agent?.cancel('user')
+          if (agent !== undefined) await agent.whenIdle()
+          this.running = false
+          await this.reopen({ ...startup, resume: id })
+          return 'continue'
+        }
         await this.printSessions()
         return 'continue'
       }
@@ -724,13 +734,16 @@ export class Repl {
         return
       }
       for (const preset of presets) {
+        const text = presetDisplayText(preset)
         const marker = preset.id === this.preset ? green(' ●') : '  '
-        this.out(`${marker} ${cyan(preset.id)}${preset.name === undefined || preset.name === preset.id ? '' : ` (${preset.name})`}${preset.broken === undefined ? '' : red(` — broken: ${preset.broken}`)}${preset.description === undefined ? '' : `\n      ${dim(preset.description)}`}\n`)
+        const label = text.name !== preset.id ? `${text.name} (${cyan(preset.id)})` : cyan(preset.id)
+        this.out(`${marker} ${label}${preset.broken === undefined ? '' : red(` — broken: ${preset.broken}`)}${text.description === undefined ? '' : `\n      ${dim(text.description)}`}\n`)
       }
       this.out(dim('  apply: /presets <id> starts a new session composed with that preset\n'))
       return
     }
-    const found = presets.find(p => p.id === rest)
+    const target = rest.trim().toLowerCase()
+    const found = presets.find(p => p.id.toLowerCase() === target || presetDisplayText(p).name.toLowerCase() === target)
     if (found === undefined) {
       this.out(yellow(`  unknown preset "${rest}"\n`))
       return
@@ -743,9 +756,10 @@ export class Repl {
     agent?.cancel('user')
     if (agent !== undefined) await agent.whenIdle()
     this.running = false
-    this.preset = rest
+    this.preset = found.id
     await this.reopen({ ...startup, resume: '' })
-    this.out(dim(`  session composed with preset "${rest}"\n`))
+    const text = presetDisplayText(found)
+    this.out(dim(`  session composed with preset "${text.name}"\n`))
   }
 
   private async handleSettings(args: string[]): Promise<void> {

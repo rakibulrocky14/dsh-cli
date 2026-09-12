@@ -30,6 +30,8 @@ export interface Config {
     print: string;
     /** Force the line REPL even on a TTY. */
     line: boolean;
+    /** Initial agent preset to compose, or empty for default. */
+    preset?: string;
 }
 /**
  * Mount the terminal surface.

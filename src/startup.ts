@@ -53,6 +53,8 @@ export interface TerminalStartupValues {
   print: string
   /** Force the line REPL even on a TTY. */
   line: boolean
+  /** Initial agent preset to compose, or empty for default. */
+  preset: string
 }
 
 /** Build this app's command; fresh each parse so tests can re-run. */
@@ -64,6 +66,7 @@ function terminalCommand(): Command {
     .option('--resume <sessionId>', 'resume a persisted session')
     .option('--model <model>', 'override the model for this session')
     .option('--provider <provider>', 'override the provider route for this session')
+    .option('--preset <preset>', 'agent preset to compose (e.g. standard, code, minimal, cordis)')
     .option('--print <task>', 'answer one task, print the final text, and exit')
     .option('--line', 'use the line REPL instead of the full-screen TUI')
     .addHelpText('after', `
@@ -71,6 +74,7 @@ Examples:
   dsh --profile terminal
   dsh --profile terminal --resume session-…
   dsh --profile terminal --model deepseek-reasoner
+  dsh --profile terminal --preset code
 
 Slash commands inside: /help /new /sessions /resume /fork /model /effort /title /tools
 /commands /skills /agents /terminals /presets /plugins /settings /permissions
@@ -85,11 +89,12 @@ Slash commands inside: /help /new /sessions /resume /fork /model /effort /title 
 export function apply(ctx: Context): void {
   const program = terminalCommand()
   program.action(() => {
-    const opts = program.opts<{ resume?: string; model?: string; provider?: string; print?: string; line?: boolean }>()
+    const opts = program.opts<{ resume?: string; model?: string; provider?: string; preset?: string; print?: string; line?: boolean }>()
     ctx.provide(TERMINAL_STARTUP_SERVICE, {
       resume: opts.resume ?? '',
       model: opts.model ?? '',
       provider: opts.provider ?? '',
+      preset: opts.preset ?? '',
       print: opts.print ?? '',
       line: opts.line ?? false,
     } satisfies TerminalStartupValues)

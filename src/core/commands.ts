@@ -18,7 +18,7 @@ export interface BuiltinCommand {
 export const BUILTINS: BuiltinCommand[] = [
   { name: 'help', desc: 'this list' },
   { name: 'new', desc: 'start a new session' },
-  { name: 'sessions', desc: 'list sessions (live + persisted)' },
+  { name: 'sessions', desc: 'browse chats by project (also /session)' },
   { name: 'resume', desc: 'resume a session: /resume <id>' },
   { name: 'fork', desc: 'fork this session at the last turn boundary' },
   { name: 'model', desc: 'show or switch model' },
@@ -29,7 +29,7 @@ export const BUILTINS: BuiltinCommand[] = [
   { name: 'skills', desc: 'list available skills' },
   { name: 'agents', desc: 'list live agents' },
   { name: 'terminals', desc: 'list persistent terminal sessions' },
-  { name: 'presets', desc: 'list agent presets' },
+  { name: 'presets', desc: 'list agent presets (also /preset [id])' },
   { name: 'plugins', desc: 'list installed DSH bundles/plugins' },
   { name: 'settings', desc: 'inspect/edit the same settings web edits' },
   { name: 'permissions', desc: 'show or switch permission preset' },

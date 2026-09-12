@@ -22,6 +22,8 @@ export interface TerminalStartupValues {
     print: string;
     /** Force the line REPL even on a TTY. */
     line: boolean;
+    /** Initial agent preset to compose, or empty for default. */
+    preset: string;
 }
 /**
  * Parse and provide terminal startup values.
