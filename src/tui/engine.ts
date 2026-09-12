@@ -208,8 +208,32 @@ export class Engine {
   }
 
   set running(value: boolean) {
+    if (this.runningFlag && !value && this.runStartValue !== undefined) {
+      const elapsed = Math.max(0.2, (Date.now() - this.runStartValue) / 1000)
+      const outTokens = this.feed.tokens?.outputTokens ?? Math.round((this.feed.liveText.length + this.feed.liveReasoning.length) / 3.5)
+      if (outTokens > 0) {
+        this.lastTps = Math.round(outTokens / elapsed)
+      }
+    }
     this.runningFlag = value
     if (!value) this.runStartValue = undefined
+  }
+
+  /** Latest settled tokens-per-second generation speed. */
+  lastTps: number | undefined = undefined
+  /** Prompt cache hit rate (e.g. '85.2%'). */
+  cacheRate: string | undefined = undefined
+
+  /** Current generation speed during a running turn or last settled turn TPS. */
+  liveTps(): number | undefined {
+    if (this.running && this.runStartValue !== undefined) {
+      const elapsed = (Date.now() - this.runStartValue) / 1000
+      if (elapsed >= 0.4) {
+        const outTokens = this.feed.tokens?.outputTokens ?? Math.round((this.feed.liveText.length + this.feed.liveReasoning.length) / 3.5)
+        if (outTokens > 0) return Math.round(outTokens / elapsed)
+      }
+    }
+    return this.lastTps
   }
 
   view: View = { name: 'chat' }
@@ -452,16 +476,23 @@ export class Engine {
     this.emit()
   }
 
-  /** Refresh cached status-bar readings (context pressure, mode). */
+  /** Refresh cached status-bar readings (context pressure, mode, cache hit rate). */
   private refreshStatus(): void {
     const agent = this.agent
     if (agent === undefined) {
       this.ctxTokens = undefined
       this.mode = ''
+      this.cacheRate = undefined
       return
     }
+    const events = readSessionEvents(agent.session)
     this.ctxTokens = this.dsh.measureTokens(agent.session)?.totalTokens
-    this.mode = this.dsh.permissionCurrent(readSessionEvents(agent.session))
+    this.mode = this.dsh.permissionCurrent(events)
+    const totals = foldUsage(events)
+    this.cacheRate = this.feed.cacheRate() ?? totals.cacheRate
+    if (totals.tps !== undefined && totals.tps > 0 && this.lastTps === undefined) {
+      this.lastTps = totals.tps
+    }
   }
 
   /**
@@ -890,10 +921,14 @@ export class Engine {
         }
         const totals = foldUsage(readSessionEvents(agent.session))
         const meter = this.dsh.measureTokens(agent.session)
+        const tps = this.lastTps ?? totals.tps
+        const cache = this.cacheRate ?? totals.cacheRate
         this.rows = [
           { id: 'responses', primary: 'responses', secondary: String(totals.responses) },
           { id: 'in', primary: 'input tokens', secondary: String(totals.input) },
           { id: 'out', primary: 'output tokens', secondary: String(totals.output) },
+          { id: 'cache', primary: 'cache hit rate', secondary: cache ?? (totals.cacheHit && totals.cacheHit > 0 ? `${totals.cacheHit} cached` : '–') },
+          { id: 'speed', primary: 'generation speed', secondary: tps !== undefined && tps > 0 ? `${tps} tps` : '–' },
           { id: 'ctx', primary: 'context pressure', secondary: meter === undefined ? '–' : `${String(meter.totalTokens)} tok` },
         ]
         this.rowsHint = 'esc back'

@@ -209,14 +209,19 @@ describe('engine', () => {
     await engine.quit()
   })
 
-  it('tracks elapsed seconds of a running turn', async () => {
+  it('tracks elapsed seconds and live generation speed of a running turn', async () => {
     const engine = await makeEngine()
     assert.equal(engine.runSeconds(), 0)
+    assert.equal(engine.liveTps(), undefined)
     engine.running = true
-    engine.runStartValue = Date.now() - 5200
-    assert.ok(engine.runSeconds() >= 5)
+    engine.runStartValue = Date.now() - 2000
+    engine.feed.tokens = { inputTokens: 50, outputTokens: 100 }
+    assert.ok(engine.runSeconds() >= 2)
+    assert.equal(engine.liveTps(), 50)
     engine.running = false
     assert.equal(engine.runSeconds(), 0)
+    assert.equal(engine.lastTps, 50)
+    assert.equal(engine.liveTps(), 50)
     await engine.quit()
   })
 
@@ -805,17 +810,44 @@ describe('frames', () => {
     assert.equal(shortSession('session-7c30bcd6-dead-beef-1234'), 'session-7c30bcd6')
     assert.equal(shortSession(''), '(no session)')
     assert.equal(fitMiddle('deepseek-official/deepseek-v4-flash-vision-exp', 24).length, 24)
-    const wide = fitStatus(120, {
+    const wide = fitStatus(140, {
       model: 'deepseek-official/deepseek-v4-flash-vision-exp', effort: 'max',
       cwd: '~/XiaomiMiMoProjects/dsh-plugins', ctxTokens: 8244, mode: 'workspace-write',
+      cacheRate: '85.2%', tps: 62,
     })
     assert.equal(wide.cwd, '~/XiaomiMiMoProjects/dsh-plugins')
     assert.equal(wide.ctx, '8.2k tok')
+    assert.equal(wide.cache, 'cache 85.2%')
+    assert.equal(wide.tps, '62 tps')
     assert.equal(wide.mode, 'WRITE')
+
+    // At 120 cols, tps drops first to keep ctx and cache
+    const fit120 = fitStatus(120, {
+      model: 'deepseek-official/deepseek-v4-flash-vision-exp', effort: 'max',
+      cwd: '~/XiaomiMiMoProjects/dsh-plugins', ctxTokens: 8244, mode: 'workspace-write',
+      cacheRate: '85.2%', tps: 62,
+    })
+    assert.equal(fit120.tps, undefined)
+    assert.equal(fit120.cache, 'cache 85.2%')
+    assert.equal(fit120.ctx, '8.2k tok')
+
+    // At 110 cols, cache drops next, ctx is kept
+    const fit110 = fitStatus(110, {
+      model: 'deepseek-official/deepseek-v4-flash-vision-exp', effort: 'max',
+      cwd: '~/XiaomiMiMoProjects/dsh-plugins', ctxTokens: 8244, mode: 'workspace-write',
+      cacheRate: '85.2%', tps: 62,
+    })
+    assert.equal(fit110.tps, undefined)
+    assert.equal(fit110.cache, undefined)
+    assert.equal(fit110.ctx, '8.2k tok')
+
     const narrow = fitStatus(48, {
       model: 'deepseek-official/deepseek-v4-flash-vision-exp', effort: 'max',
       cwd: '~/XiaomiMiMoProjects/dsh-plugins', ctxTokens: 8244, mode: 'workspace-write',
+      cacheRate: '85.2%', tps: 62,
     })
+    assert.equal(narrow.tps, undefined)
+    assert.equal(narrow.cache, undefined)
     assert.equal(narrow.ctx, undefined)
     assert.equal(narrow.cwd, 'dsh-plugins')
     assert.match(narrow.model, /…/)

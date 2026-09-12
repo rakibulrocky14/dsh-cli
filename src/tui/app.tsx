@@ -305,7 +305,9 @@ export function App({ engine, startup, mouse = true }: { engine: Engine; startup
       : `${selection.provider}/${selection.model}`
   const sessionId = engine.agent?.id ?? ''
   const presetName = engine.preset === '' ? '' : presetDisplayText({ id: engine.preset }).name
-  const sessionLabel = `${shortSession(sessionId)} · ${engine.running ? `working ${String(engine.runSeconds())}s` : 'idle'}${presetName === '' ? '' : ` · ${presetName}`}`
+  const liveTps = engine.liveTps()
+  const tpsTag = engine.running && liveTps !== undefined && liveTps > 0 ? ` · ${String(liveTps)} tps` : ''
+  const sessionLabel = `${shortSession(sessionId)} · ${engine.running ? `working ${String(engine.runSeconds())}s${tpsTag}` : 'idle'}${presetName === '' ? '' : ` · ${presetName}`}`
   return (
     <Box flexDirection="column" width={frameWidth} height={frameRows} overflow="hidden">
       <Box flexDirection="column" height={transcriptRows} overflowY="hidden" justifyContent="flex-end" paddingX={1}>
@@ -341,6 +343,7 @@ export function App({ engine, startup, mouse = true }: { engine: Engine; startup
               running={engine.running}
               spinnerFrame={engine.spinnerFrame}
               runSeconds={engine.runSeconds()}
+              tps={liveTps}
               width={contentWidth}
               model={modelLabel}
               effort={engine.effectiveEffort()}
@@ -355,6 +358,8 @@ export function App({ engine, startup, mouse = true }: { engine: Engine; startup
             ctxTokens={engine.ctxTokens}
             ctxWindow={engine.ctxWindow}
             mode={engine.mode}
+            cacheRate={engine.cacheRate}
+            tps={liveTps}
             running={engine.running}
             modalOpen={modal !== undefined}
             inPanel={inPanel}

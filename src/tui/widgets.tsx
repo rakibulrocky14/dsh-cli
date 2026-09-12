@@ -508,6 +508,10 @@ export interface StatusInput {
   /** Model context window, when resolved — upgrades the ctx segment to a percent. */
   ctxWindow?: number
   mode: string
+  /** Prompt cache hit rate (e.g. '85.2%'). */
+  cacheRate?: string
+  /** Settled or live generation speed in tokens per second. */
+  tps?: number
 }
 
 /** Status-line segments after width fitting (single line, no wrapping). */
@@ -517,6 +521,8 @@ export interface StatusFit {
   cwd: string
   ctx: string | undefined
   mode: string
+  cache?: string
+  tps?: string
 }
 
 /**
@@ -530,8 +536,8 @@ export function formatCtx(tokens: number, window?: number): string {
 }
 
 /**
- * Fit status segments into one line: short mode chip always, then drop ctx,
- * shorten the path to its basename, then mid-clip the model id.
+ * Fit status segments into one line: short mode chip always, then drop tps,
+ * drop cache, drop ctx, shorten the path to its basename, then mid-clip the model id.
  * @param width - available content columns.
  * @param input - raw segments.
  */
@@ -540,12 +546,18 @@ export function fitStatus(width: number, input: StatusInput): StatusFit {
   const effort = input.effort === '' ? 'auto' : input.effort
   let cwd = input.cwd
   let ctx = input.ctxTokens === undefined ? undefined : formatCtx(input.ctxTokens, input.ctxWindow)
+  let cache = input.cacheRate !== undefined && input.cacheRate !== '' ? `cache ${input.cacheRate}` : undefined
+  let tps = input.tps !== undefined && input.tps > 0 ? `${String(input.tps)} tps` : undefined
   let model = input.model === '' ? 'unknown model' : input.model
   const total = (): number => {
     const parts = [model, effort, cwd, mode]
     if (ctx !== undefined) parts.push(ctx)
+    if (cache !== undefined) parts.push(cache)
+    if (tps !== undefined) parts.push(tps)
     return parts.reduce((n, part) => n + displayLen(part), 0) + (parts.length - 1) * 3
   }
+  if (total() > width) tps = undefined
+  if (total() > width) cache = undefined
   if (total() > width) ctx = undefined
   if (total() > width) {
     const slash = cwd.lastIndexOf('/')
@@ -554,10 +566,13 @@ export function fitStatus(width: number, input: StatusInput): StatusFit {
   }
   if (total() > width) {
     const others = [effort, cwd, mode].reduce((n, part) => n + displayLen(part), 0)
-      + (ctx === undefined ? 0 : displayLen(ctx)) + 4 * 3
+      + (ctx === undefined ? 0 : displayLen(ctx))
+      + (cache === undefined ? 0 : displayLen(cache))
+      + (tps === undefined ? 0 : displayLen(tps))
+      + 4 * 3
     model = fitMiddle(model, Math.max(16, width - others))
   }
-  return { model, effort, cwd, ctx, mode }
+  return { model, effort, cwd, ctx, mode, cache, tps }
 }
 
 /**
@@ -669,6 +684,7 @@ export function Composer({
   running = false,
   spinnerFrame = 0,
   runSeconds = 0,
+  tps,
   width = MAX_CONTENT,
   placeholder,
   model,
@@ -679,6 +695,7 @@ export function Composer({
   running?: boolean
   spinnerFrame?: number
   runSeconds?: number
+  tps?: number
   width?: number
   placeholder?: string
   model?: string
@@ -688,8 +705,9 @@ export function Composer({
   const runHint = 'Steer the turn…'
   const label = running ? spinnerGlyph(spinnerFrame) : '❯'
   const innerWidth = Math.max(20, width - 4)
+  const tpsPart = tps !== undefined && tps > 0 ? ` · ${String(tps)} tps` : ''
   const leftTag = running
-    ? `${spinnerGlyph(spinnerFrame)} working ${String(runSeconds)}s`
+    ? `${spinnerGlyph(spinnerFrame)} working ${String(runSeconds)}s${tpsPart}`
     : model !== undefined && model !== ''
       ? effort ? `${model} · ${effort}` : model
       : ''
@@ -895,14 +913,16 @@ export function TextDialog({ modal, width = MAX_CONTENT }: { modal: Extract<Moda
   )
 }
 
-/** Width-fitted status line (`model · effort · ~/cwd · ctx · MODE`) plus key hints. */
-export function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, running, modalOpen, inPanel, width }: {
+/** Width-fitted status line (`model · effort · ~/cwd · ctx · cache · tps · MODE`) plus key hints. */
+export function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, cacheRate, tps, running, modalOpen, inPanel, width }: {
   model: string
   effort: string
   cwd: string
   ctxTokens: number | undefined
   ctxWindow?: number
   mode: string
+  cacheRate?: string
+  tps?: number
   running: boolean
   modalOpen: boolean
   inPanel: boolean
@@ -917,7 +937,7 @@ export function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, running
         : 'enter send · wheel/pgup scroll · / commands · ctrl-d quit'
   // One column of guard: the status must never touch the last cell, where a
   // wide-glyph surprise would wrap the line and desync the repaint.
-  const fit = fitStatus(Math.max(24, width - 1), { model, effort, cwd, ctxTokens, ctxWindow, mode })
+  const fit = fitStatus(Math.max(24, width - 1), { model, effort, cwd, ctxTokens, ctxWindow, mode, cacheRate, tps })
   return (
     <Box flexDirection="column">
       <Box>
@@ -927,6 +947,8 @@ export function Footer({ model, effort, cwd, ctxTokens, ctxWindow, mode, running
         <Text dimColor> · </Text>
         <Text dimColor>{fit.cwd}</Text>
         {fit.ctx === undefined ? undefined : (<><Text dimColor> · </Text><Text dimColor>{fit.ctx}</Text></>)}
+        {fit.cache === undefined ? undefined : (<><Text dimColor> · </Text><Text color={theme.success}>{fit.cache}</Text></>)}
+        {fit.tps === undefined ? undefined : (<><Text dimColor> · </Text><Text color={theme.accent}>{fit.tps}</Text></>)}
         <Text dimColor> · </Text>
         {mode === ''
           ? <Text dimColor>–</Text>
