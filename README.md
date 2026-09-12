@@ -1,6 +1,6 @@
 # ⚡ dsh-cli (dsh-terminal)
 
-> **Vanilla DeepSeek Harness in the terminal** — A Web-GUI-parity Cordis surface over `dsh-base`. Your agents, presets, tools, sessions, approval, settings, and plugins directly in your terminal. Nothing extra, nothing less.
+> **DeepSeek Harness in the terminal** — A Web-GUI-parity Cordis surface over `dsh-base`. Your agents, presets, tools, sessions, approval, settings, and plugins directly in your terminal. Nothing extra, nothing less.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](https://nodejs.org)
