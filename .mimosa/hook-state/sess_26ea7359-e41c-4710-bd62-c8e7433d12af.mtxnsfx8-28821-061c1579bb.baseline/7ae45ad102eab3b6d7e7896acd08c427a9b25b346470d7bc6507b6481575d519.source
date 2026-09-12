@@ -1,0 +1,61 @@
+{
+  "name": "dsh-terminal",
+  "version": "0.1.0",
+  "description": "Vanilla DSH in the terminal: a Web-GUI-parity Cordis surface over dsh-base. Your plugins, presets, tools, and settings — nothing extra, nothing less.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "tui",
+    "terminal",
+    "agent"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./startup": {
+      "types": "./lib/types/startup.d.ts",
+      "default": "./lib/startup.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-terminal": "bin/dsh-terminal.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf lib",
+    "test": "npm run build && node --test \"tests/*.test.mjs\""
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "ink": "^7.1.1",
+    "react": "^19.3.0"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0"
+  }
+}

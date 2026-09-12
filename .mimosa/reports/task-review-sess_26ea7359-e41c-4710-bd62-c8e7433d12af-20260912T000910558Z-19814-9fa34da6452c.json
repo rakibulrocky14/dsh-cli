@@ -1,0 +1,237 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260912T000910558Z-19814-9fa34da6452c",
+  "run_status": "completed",
+  "errors": [],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "complete",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 44,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 5
+    },
+    "change_tracking": {
+      "touched_observed": 2,
+      "touched_retained": 2,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 5,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 5,
+      "selected_files": 5,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 5,
+      "scanned_files": 5,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 0,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {},
+    "reasons": [],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-12T00:09:10.558Z",
+  "session_id": "sess_26ea7359-e41c-4710-bd62-c8e7433d12af",
+  "target": ".",
+  "revision": "8268c429429ed89eda497a3cc09db002361a27e3",
+  "rules_version": "unavailable",
+  "diff_hash": "7208362924cf000cf013cca07fd757511590541d7c793392b23483eec392d518",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 5,
+    "changed_files": [
+      {
+        "file": "lib/tui/app.js",
+        "ranges": [
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 100,
+            "end": 100
+          },
+          {
+            "start": 169,
+            "end": 174
+          }
+        ],
+        "before_hash": "2218f2981afe8b8e9dc53fcd56692ffe7c74a88bd7bcda6e929c6d1191c363c2",
+        "after_hash": "298bb6985748e2e4e376811bb16324000f59f889c12b97ff9a2c932034ef4023"
+      },
+      {
+        "file": "lib/tui/widgets.js",
+        "ranges": [
+          {
+            "start": 47,
+            "end": 49
+          },
+          {
+            "start": 54,
+            "end": 55
+          },
+          {
+            "start": 57,
+            "end": 57
+          },
+          {
+            "start": 357,
+            "end": 369
+          }
+        ],
+        "before_hash": "7ad57b8b3279f155acbc7b00eb138a2b4e2ff2649749b36fcc30ddb22974e820",
+        "after_hash": "d273cfd81f897849b23071b98762de59a4485a1af3b838b05bc8ad56967cc7ec"
+      },
+      {
+        "file": "lib/types/tui/widgets.d.ts",
+        "ranges": [
+          {
+            "start": 31,
+            "end": 33
+          },
+          {
+            "start": 147,
+            "end": 151
+          }
+        ],
+        "before_hash": "b1d6631adb538d62b9981e970a731acc7c7a37f38ef0755ecd656201e3f9a33d",
+        "after_hash": "d4d583de9c77476b347bbd9d296d4368a12422eb14dd77e7a04d672b8c41cc17"
+      },
+      {
+        "file": "src/tui/app.tsx",
+        "ranges": [
+          {
+            "start": 30,
+            "end": 30
+          },
+          {
+            "start": 148,
+            "end": 148
+          },
+          {
+            "start": 235,
+            "end": 239
+          },
+          {
+            "start": 241,
+            "end": 246
+          },
+          {
+            "start": 251,
+            "end": 288
+          },
+          {
+            "start": 290,
+            "end": 291
+          },
+          {
+            "start": 294,
+            "end": 294
+          }
+        ],
+        "before_hash": "24781e631f50bb457dd8987656584a88a5486ad6671c5e2c1f1ac98475afbcfc",
+        "after_hash": "eb91658c4916b0a233b3baa78b8cac643d4348e11223ef79fbe0d4dde250b976"
+      },
+      {
+        "file": "src/tui/widgets.tsx",
+        "ranges": [
+          {
+            "start": 51,
+            "end": 53
+          },
+          {
+            "start": 64,
+            "end": 65
+          },
+          {
+            "start": 68,
+            "end": 74
+          },
+          {
+            "start": 76,
+            "end": 83
+          },
+          {
+            "start": 86,
+            "end": 89
+          },
+          {
+            "start": 504,
+            "end": 517
+          }
+        ],
+        "before_hash": "a1b1cde9628b238dbed772f4af6107b7120d943c3ac1a43f3d57e72df67954b3",
+        "after_hash": "92c40b4a928de003b9f2e63146aba2bb8fd734c00850582bc3fd75bbd43c5f0f"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-12T00:09:09.557Z",
+    "completed_at": "2026-09-12T00:09:10.558Z",
+    "duration_ms": 1001,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "complete",
+    "latencyMs": 1001,
+    "peakMemoryBytes": 233979904,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 5,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af-20260912T000910558Z-19814-9fa34da6452c.json",
+    "latest_report": ".mimosa/reports/task-review-sess_26ea7359-e41c-4710-bd62-c8e7433d12af.json",
+    "history_summary": ".mimosa/history/run-20260912T000910558Z-19814-9fa34da6452c.json"
+  }
+}
