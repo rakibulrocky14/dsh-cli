@@ -6,6 +6,8 @@
 [![Node.js Version](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](https://nodejs.org)
 [![Community Plugin](https://img.shields.io/badge/DeepSeek%20Harness-Community%20Plugin%20(Unofficial)-0066FF.svg)](https://github.com/rakibulrocky14/dsh-cli)
 
+**[English](README.md) | [简体中文](README_CN.md)**
+
 > [!IMPORTANT]
 > **Disclaimer**: This is an independent, community-driven open-source project and is **not affiliated with, endorsed by, or sponsored by DeepSeek AI or the official DeepSeek team**. "DeepSeek" and "DeepSeek Harness" are trademarks of their respective holders.
 
