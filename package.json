@@ -1,6 +1,6 @@
 {
   "name": "dsh-terminal",
-  "version": "0.1.0",
+  "version": "0.1.5-rc.2",
   "description": "Vanilla DSH in the terminal: a Web-GUI-parity Cordis surface over dsh-base (Unofficial Community Plugin). Your plugins, presets, tools, and settings — nothing extra, nothing less.",
   "keywords": [
     "dsh",
@@ -52,8 +52,8 @@
     "react": "^19.3.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-agent-presets": "^0.1.1-rc.2",
-    "@deepseek-ai/dsh-workspace": "^0.1.1-rc.2"
+    "@deepseek-ai/dsh-agent-presets": ">=0.1.1-rc.2",
+    "@deepseek-ai/dsh-workspace": ">=0.1.1-rc.2"
   },
   "engines": {
     "node": "^22.19 || >=24"
