@@ -181,6 +181,15 @@ npm test
 
 ---
 
+## 🤝 Contributing
+
+Contributions, bug reports, and pull requests are warmly welcomed! Anyone is welcome to contribute to `dsh-cli`.
+
+- 📖 Check out [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, testing guidelines, and PR process.
+- 💡 Have an idea or found a bug? Feel free to open an issue or pull request anytime!
+
+---
+
 ## ⚠️ Disclaimer
 
 `dsh-cli` is an independent, unofficial community project built for the DeepSeek Harness ecosystem. It is **not affiliated with, maintained by, sponsored by, or endorsed by DeepSeek AI or Hangzhou DeepSeek Artificial Intelligence Co., Ltd.**
